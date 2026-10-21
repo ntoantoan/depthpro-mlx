@@ -5,10 +5,9 @@ import time
 from pathlib import Path
 
 import imageio.v3 as iio
-import numpy as np
+from _scene import load_scene
 
-from depthpro_mlx.geometry import depth_to_points
-from depthpro_mlx.io import load_image
+from depthpro_mlx.geometry import layered_points
 from depthpro_mlx.render import orbit_frames
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,13 +22,11 @@ def main() -> None:
     args = parser.parse_args()
 
     for name in args.names:
-        image, _ = load_image(ROOT / "samples" / f"{name}.jpg")
-        depth = np.load(ROOT / "outputs" / f"{name}_depth.npy")
-        f_px = float(np.load(ROOT / "outputs" / f"{name}_f.npy"))
+        image, depth, f_px, background = load_scene(name)
         h, w = image.shape[:2]
         # Keep >= ~2.5 source points per output pixel (2x supersampling + zoom margin).
         stride = max(1, int(w // (2.5 * args.width)))
-        points, colors = depth_to_points(depth, image, f_px, stride=stride)
+        points, colors = layered_points(depth, image, f_px, background, stride=stride)
         width, height = args.width, round(h * args.width / w) // 2 * 2
         t0 = time.perf_counter()
         frames = list(

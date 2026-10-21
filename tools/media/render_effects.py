@@ -6,22 +6,14 @@ from pathlib import Path
 
 import cv2
 import imageio.v3 as iio
-import numpy as np
+from _scene import load_scene
 from make_hero import label
 from PIL import Image
 
 from depthpro_mlx.effects import Refocus, dolly_zoom_frames
-from depthpro_mlx.geometry import depth_to_points
-from depthpro_mlx.io import load_image
+from depthpro_mlx.geometry import layered_points
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def load(name: str):
-    image, _ = load_image(ROOT / "samples" / f"{name}.jpg")
-    depth = np.load(ROOT / "outputs" / f"{name}_depth.npy")
-    f_px = float(np.load(ROOT / "outputs" / f"{name}_f.npy"))
-    return image, depth, f_px
 
 
 def main() -> None:
@@ -36,12 +28,12 @@ def main() -> None:
     args = parser.parse_args()
 
     for name in args.names:
-        image, depth, f_px = load(name)
+        image, depth, f_px, background = load_scene(name, layered=args.effect == "dolly")
         h, w = image.shape[:2]
         width, height = args.width, round(h * args.width / w) // 2 * 2
         t0 = time.perf_counter()
         if args.effect == "dolly":
-            points, colors = depth_to_points(depth, image, f_px, stride=max(1, int(w // (2.5 * width))))
+            points, colors = layered_points(depth, image, f_px, background, stride=max(1, int(w // (2.5 * width))))
             frames = list(dolly_zoom_frames(points, colors, f_px * width / w, width, height, n_frames=args.frames))
             if args.label:
                 frames = [label(f, "dolly zoom from 1 photo") for f in frames]
