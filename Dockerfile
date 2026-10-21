@@ -42,6 +42,8 @@ LABEL org.opencontainers.image.title="depthpro-mlx" \
 RUN if ! command -v python3 >/dev/null; then \
       apt-get update && apt-get install -y --no-install-recommends python3.12 && rm -rf /var/lib/apt/lists/*; \
     fi && \
+    # Ubuntu 24.04 based images (e.g. nvidia/cuda) already have user 'ubuntu' with uid 1000.
+    (userdel --remove ubuntu 2>/dev/null || true) && \
     useradd --create-home --uid 1000 depthpro && mkdir -p /cache /data && chown depthpro /cache /data
 COPY --from=build /opt/venv /opt/venv
 # mlx-cpu bundles the netlib *reference* BLAS: single-threaded, ~7 GFLOP/s. Swapping in OpenBLAS

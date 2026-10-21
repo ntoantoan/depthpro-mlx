@@ -16,7 +16,7 @@ import numpy as np
 from .hub import HF_REPO, WEIGHTS_FILE, resolve_weights
 from .model import DepthPro
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = [
     "HF_REPO",
     "WEIGHTS_FILE",
