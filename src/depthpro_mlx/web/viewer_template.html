@@ -42,6 +42,7 @@ const SRC = {
   image: "data:image/jpeg;base64,__IMAGE__",
   depth: "data:image/png;base64,__DEPTH__",
   bgImage: "data:image/jpeg;base64,__BG_IMAGE__",
+  bgDepth: "__BG_DEPTH_URI__",
 };
 
 const canvas = document.getElementById("gl");
@@ -123,7 +124,7 @@ const FS = `#version 300 es
 precision highp float;
 in vec2 vUV; in float vInv; in float vEdge;
 uniform sampler2D uImage; uniform sampler2D uBackground; uniform float uDepthMix; uniform vec2 uTexelsPerPixel;
-uniform float uOffAxis;
+uniform float uOffAxis; uniform int uMode;   // 0: background layer, 1: photo over a layer, 2: photo only
 out vec4 outColor;
 vec3 turbo(float x) {
   x = clamp(x, 0.0, 1.0);
@@ -145,8 +146,12 @@ void main() {
   // fade to the background as the camera leaves the photo's viewpoint (no halo on the subject).
   float nearEdge = smoothstep(0.02, 0.12, vEdge) * uOffAxis * (1.0 - smoothstep(0.7, 1.0, minRate));
   stretch = max(stretch, nearEdge);
-  vec3 photo = mix(texture(uImage, vUV).rgb, texture(uBackground, vUV).rgb, stretch);
-  outColor = vec4(mix(photo, turbo(vInv), uDepthMix), 1.0);
+  vec3 photo = texture(uImage, vUV).rgb;
+  float alpha = 1.0;
+  if (uMode == 1) alpha = 1.0 - stretch;                       // reveal the inpainted layer behind
+  else if (uMode == 2) photo = mix(photo, texture(uBackground, vUV).rgb, stretch);
+  if (alpha < 0.01) discard;
+  outColor = vec4(mix(photo, turbo(vInv), uDepthMix), alpha);
 }`;
 
 function compile(type, src) {
@@ -173,7 +178,9 @@ function mul(a, b) {
 }
 
 (async function main() {
-  const [img, depthImg, bgImg] = await Promise.all([SRC.image, SRC.depth, SRC.bgImage].map(loadImage));
+  const layered = SRC.bgDepth.startsWith("data:");
+  const [img, depthImg, bgImg, bgDepthImg] = await Promise.all(
+    [SRC.image, SRC.depth, SRC.bgImage, layered ? SRC.bgDepth : SRC.depth].map(loadImage));
   const D = decodeDepth(depthImg);
 
   const prog = gl.createProgram();
@@ -195,6 +202,9 @@ function mul(a, b) {
     return { vao, tex, count: mesh.idx.length };
   }
   const layer = upload(buildMesh(D), img);
+  const bgLayer = layered ? upload(buildMesh(decodeDepth(bgDepthImg)), bgImg) : null;
+  const uMode = gl.getUniformLocation(prog, "uMode");
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   const bgTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, bgTex);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, bgImg); gl.generateMipmap(gl.TEXTURE_2D);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
@@ -322,6 +332,13 @@ function mul(a, b) {
     const pxPerUV = canvas.height / (2 * Math.tan(fovy / 2) * P.f / P.height);
     gl.uniform2f(uTexelsPerPixel, (P.height / P.width) / pxPerUV, 1 / pxPerUV);
     gl.uniform1f(uOffAxis, Math.min(1, Math.hypot(current[0], current[1] * 0.6) * 1.5));
+    if (bgLayer) {                                    // inpainted background first, slightly farther
+      gl.disable(gl.BLEND); gl.uniform1i(uMode, 0); gl.uniform1f(uPush, 1.003); gl.bindVertexArray(bgLayer.vao);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, bgLayer.tex);
+      gl.drawElements(gl.TRIANGLES, bgLayer.count, gl.UNSIGNED_INT, 0);
+      gl.enable(gl.BLEND);
+    }
+    gl.uniform1i(uMode, bgLayer ? 1 : 2);
     gl.uniform1f(uPush, 1.0); gl.bindVertexArray(layer.vao);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, layer.tex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bgTex);

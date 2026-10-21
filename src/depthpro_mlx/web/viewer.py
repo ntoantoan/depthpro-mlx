@@ -93,6 +93,14 @@ def background_layer(
     return bg_color, bg_depth
 
 
+def _has_onnxruntime() -> bool:
+    try:
+        import onnxruntime  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def export_viewer(
     path: str | Path,
     image: np.ndarray,
@@ -102,8 +110,9 @@ def export_viewer(
     max_size: int = 1920,
     depth_size: int = 960,
     grid: int = 960,
-    max_parallax: float = 0.018,
-    depth_ratio: float = 6.0,
+    max_parallax: float | None = None,
+    depth_ratio: float | None = None,
+    background: str | tuple[np.ndarray, np.ndarray, np.ndarray] | None = "auto",
 ) -> Path:
     """Write ``path``: an .html file that works offline, from file://, and on phones.
 
@@ -113,7 +122,26 @@ def export_viewer(
     front of a sky) then no longer eats the whole parallax budget, so the edge
     stretch can be capped low (``max_parallax`` x width) while the middle of
     the scene still moves. Measurements always use the true metric depth.
+
+    ``background`` controls what shows where the photo is uncovered:
+    ``"lama"`` inpaints a real background layer (needs the ``inpaint`` extra),
+    ``"fast"`` blends a blurred fill into stretched areas, ``"auto"`` picks LaMa
+    when available, or pass ``(color, depth, mask)`` from
+    :func:`depthpro_mlx.inpaint.layered_background`. With a real layer the
+    camera may move further (``max_parallax`` 0.03 vs 0.018).
     """
+    if isinstance(background, str):
+        if background == "auto":
+            background = "lama" if _has_onnxruntime() else "fast"
+        if background == "lama":
+            from ..inpaint import layered_background
+
+            background = layered_background(image, depth)
+        elif background != "fast":
+            raise ValueError(f"unknown background mode: {background}")
+    layered = isinstance(background, tuple)
+    max_parallax = max_parallax or (0.03 if layered else 0.018)
+    depth_ratio = depth_ratio or (10.0 if layered else 6.0)
     h, w = image.shape[:2]
     scale = min(1.0, max_size / max(h, w))
     color = (
@@ -122,9 +150,14 @@ def export_viewer(
     ds = min(1.0, depth_size / max(h, w))
     small_depth = cv2.resize(depth, (round(w * ds), round(h * ds)), interpolation=cv2.INTER_AREA)
 
-    # Background layer at color resolution (depth upsampled to match), then downsampled for the mesh.
-    depth_c = cv2.resize(depth, (color.shape[1], color.shape[0]), interpolation=cv2.INTER_LINEAR)
-    bg_color, _ = background_layer(color, depth_c)
+    if layered:
+        bg_rgb, bg_z, _ = background
+        bg_color = cv2.resize(bg_rgb, (color.shape[1], color.shape[0]), interpolation=cv2.INTER_AREA)
+        bg_depth = cv2.resize(bg_z, (small_depth.shape[1], small_depth.shape[0]), interpolation=cv2.INTER_AREA)
+    else:  # blurred fill blended into stretched areas of a single mesh
+        depth_c = cv2.resize(depth, (color.shape[1], color.shape[0]), interpolation=cv2.INTER_LINEAR)
+        bg_color, _ = background_layer(color, depth_c)
+        bg_depth = None
 
     inv = 1.0 / np.clip(small_depth, 1e-3, None)
     inv_min, inv_max = float(np.percentile(inv, 0.2)), float(np.percentile(inv, 99.8))
@@ -155,6 +188,10 @@ def export_viewer(
         .replace("__IMAGE__", _encode_jpeg(color))
         .replace("__DEPTH__", _encode_inverse_depth(small_depth, inv_min, inv_max))
         .replace("__BG_IMAGE__", _encode_jpeg(bg_color, quality=80))
+        .replace(
+            "__BG_DEPTH_URI__",
+            "data:image/png;base64," + _encode_inverse_depth(bg_depth, inv_min, inv_max) if layered else "",
+        )
     )
     path = Path(path)
     path.write_text(html)
