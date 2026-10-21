@@ -87,7 +87,9 @@ def main() -> None:
     out = Path(args.out or ROOT / "assets" / f"{args.name}.webp")
     out.parent.mkdir(parents=True, exist_ok=True)
     pil = [Image.fromarray(f) for f in frames]
-    pil[0].save(out, save_all=True, append_images=pil[1:], duration=1000 // args.fps, loop=0, quality=args.quality, method=6)
+    pil[0].save(
+        out, save_all=True, append_images=pil[1:], duration=1000 // args.fps, loop=0, quality=args.quality, method=6
+    )
     iio.imwrite(out.with_suffix(".mp4"), frames, fps=args.fps * 2 if not args.story else 24, codec="libx264", quality=8)
     print(f"{out.name}: {len(frames)} frames {width}x{height}, {out.stat().st_size / 1e6:.1f} MB")
 
