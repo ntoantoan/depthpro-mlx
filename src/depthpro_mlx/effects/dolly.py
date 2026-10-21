@@ -17,7 +17,7 @@ def dolly_zoom_frames(
     height: int,
     n_frames: int = 96,
     subject_quantile: float = 0.3,
-    min_magnification: float = 0.85,
+    min_magnification: float = 0.9,
     max_dolly: float = 0.5,
 ) -> Iterator[np.ndarray]:
     """Hitchcock "vertigo" shot from a single photo.

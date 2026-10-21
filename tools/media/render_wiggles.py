@@ -1,6 +1,6 @@
 """README wiggle previews: real views along the 63 mm eye baseline (with the LaMa layer).
 
-uv run python tools/media/render_wiggles.py incense_village hue_citadel
+uv run python tools/media/render_wiggles.py incense_village bamboo_bicycle
 """
 
 import argparse

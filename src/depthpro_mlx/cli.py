@@ -20,7 +20,7 @@ import mlx.core as mx
 import numpy as np
 from PIL import Image
 
-from . import load_model, predict
+from . import __version__, load_model, predict
 from .effects import Refocus, dolly_zoom_frames
 from .geometry import depth_to_points, layered_points, save_ply
 from .io import colorize_depth, fit_width, load_image
@@ -62,6 +62,7 @@ def main() -> None:
         prog="depthpro-mlx", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("image", type=Path)
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-o", "--out-dir", type=Path, default=None, help="default: <image>_depthpro/")
     parser.add_argument(
         "--weights", type=Path, default=None, help="local .safetensors (default: download from the Hub)"
@@ -167,7 +168,9 @@ def main() -> None:
             )
             name = "3d"
         elif effect == "dolly":
-            frames = list(dolly_zoom_frames(points, colors, f_out, width, height, n_frames=args.frames))
+            # The background is magnified up to ~1.5x: use a denser point set than the orbit.
+            dp, dc = layered_points(depth, image, f_px, background, stride=max(1, int(w // (4 * width))))
+            frames = list(dolly_zoom_frames(dp, dc, f_out, width, height, n_frames=args.frames))
             name = "dolly_zoom"
         else:
             small = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)

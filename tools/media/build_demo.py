@@ -16,7 +16,8 @@ from depthpro_mlx.web import export_viewer
 SCENES = [
     ("incense_village", "Incense village · Quảng Phú Cầu"),
     ("hoi_an_lanterns", "Lantern street · Hội An"),
-    ("hue_citadel", "Imperial City · Huế"),
+    ("bamboo_bicycle", "Bamboo bicycle · Hội An"),
+    ("hue_gate", "Imperial City gate · Huế"),
     ("douc_langur", "Douc langurs · Sơn Trà"),
     ("ninh_binh_swan_boats", "Swan boats · Ninh Bình"),
     ("hai_van_pass", "Hải Vân Pass · Đà Nẵng"),

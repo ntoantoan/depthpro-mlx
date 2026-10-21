@@ -33,7 +33,8 @@ def main() -> None:
         width, height = args.width, round(h * args.width / w) // 2 * 2
         t0 = time.perf_counter()
         if args.effect == "dolly":
-            points, colors = layered_points(depth, image, f_px, background, stride=max(1, int(w // (2.5 * width))))
+            # Dolly zoom magnifies the far background up to ~1.5x: sample ~4 points per output pixel.
+            points, colors = layered_points(depth, image, f_px, background, stride=max(1, int(w // (4 * width))))
             frames = list(dolly_zoom_frames(points, colors, f_px * width / w, width, height, n_frames=args.frames))
             if args.label:
                 frames = [label(f, "dolly zoom from 1 photo") for f in frames]
