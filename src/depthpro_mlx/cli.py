@@ -21,7 +21,7 @@ from PIL import Image
 
 from . import load_model, predict
 from .effects import Refocus, dolly_zoom_frames
-from .geometry import depth_to_points, save_ply
+from .geometry import depth_to_points, layered_points, save_ply
 from .io import colorize_depth, fit_width, load_image
 from .render import orbit_frames
 from .spatial import render_stereo, side_by_side, wiggle_frames, write_spatial_heic
@@ -50,6 +50,12 @@ def main() -> None:
         help="Apple spatial photo (stereo HEIC at a 63 mm baseline) + side-by-side + wiggle",
     )
     parser.add_argument("--web", action="store_true", help="self-contained interactive 3D viewer (viewer.html)")
+    parser.add_argument(
+        "--inpaint",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="LaMa background layer for uncovered regions (needs the 'inpaint' extra; auto = when installed)",
+    )
     parser.add_argument("--width", type=int, default=1280, help="video width")
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--amplitude", type=float, default=0.06, help="camera motion, fraction of subject depth")
@@ -88,13 +94,29 @@ def main() -> None:
         save_ply(out_dir / "pointcloud.ply", points, colors)
         print(f"point cloud: {len(points):,} points")
 
+    background = None
+    needs_layer = bool({"orbit", "dolly"} & set(effects)) or args.spatial or args.web
+    if needs_layer and args.inpaint != "off":
+        from .web.viewer import _has_onnxruntime
+
+        if _has_onnxruntime():
+            from .inpaint import layered_background
+
+            t0 = time.perf_counter()
+            background = layered_background(image, depth)
+            print(
+                f"background layer (LaMa) in {time.perf_counter() - t0:.0f}s, {background[2].mean() * 100:.0f}% of pixels"
+            )
+        elif args.inpaint == "on":
+            parser.error('--inpaint on needs onnxruntime: pip install "depthpro-mlx[inpaint]"')
+
     h, w = image.shape[:2]
     width = min(args.width, w)
     height = round(h * width / w) // 2 * 2
     f_out = f_px * width / w
     if {"orbit", "dolly"} & set(effects):
         # ~2.5 source points per output pixel: enough for 2x supersampling plus zoom.
-        points, colors = depth_to_points(depth, image, f_px, stride=max(1, int(w // (2.5 * width))))
+        points, colors = layered_points(depth, image, f_px, background, stride=max(1, int(w // (2.5 * width))))
 
     for effect in effects:
         t0 = time.perf_counter()
@@ -121,7 +143,7 @@ def main() -> None:
         t0 = time.perf_counter()
         sw = min(w, 2560)
         sh = round(h * sw / w) // 2 * 2
-        sp, sc = depth_to_points(depth, image, f_px, stride=max(1, int(w // (2.5 * sw))))
+        sp, sc = layered_points(depth, image, f_px, background, stride=max(1, int(w // (2.5 * sw))))
         left, right, f_stereo = render_stereo(sp, sc, f_px * sw / w, sw, sh)
         Image.fromarray(side_by_side(left, right)).save(out_dir / "stereo_sbs.jpg", quality=92)
         wiggle = [Image.fromarray(fit_width(f, 640)) for f in wiggle_frames(left, right)]
@@ -137,7 +159,9 @@ def main() -> None:
     if args.web:
         from .web import export_viewer
 
-        export_viewer(out_dir / "viewer.html", image, depth, f_px, title=args.image.stem)
+        export_viewer(
+            out_dir / "viewer.html", image, depth, f_px, title=args.image.stem, background=background or "fast"
+        )
         print("viewer.html: open it in a browser, drag to look around")
 
     print(f"outputs -> {out_dir}")
