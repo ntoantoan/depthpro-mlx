@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# secrets
+.env
+
+# local Claude settings
+.claude/settings.local.json
+
+# large artifacts
+checkpoints/
+outputs/
+weights/
+third_party/*
+!third_party/get_reference.sh
+samples/
+
+# social media renders (large)
+assets/*.mp4
+dist/
+
+# generated demo site (published to the Hugging Face Space)
+demo/scenes/
+demo/thumbs/
