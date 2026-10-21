@@ -80,7 +80,7 @@ build-backend = "hatchling.build"
 path = "src/depthpro_mlx/__init__.py"
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/assets", "/demo", "/tools", "/hf", "/third_party", "/.github", "/.coverage", "/uv.lock"]
+exclude = ["/assets", "/demo", "/tools", "/hf", "/third_party", "/.github", "/.coverage", "/uv.lock", "/CLAUDE.md"]
 
 [tool.ruff]
 line-length = 120
