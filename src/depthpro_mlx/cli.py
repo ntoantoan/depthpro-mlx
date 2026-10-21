@@ -1,9 +1,10 @@
-"""depthpro-mlx: single photo -> metric depth, 3D point cloud and cinematic effects.
+"""depthpro-mlx: metric depth for a photo or a video, plus 3D and cinematic effects.
 
 Examples:
     depthpro-mlx photo.jpg                          # depth.png + 3D parallax video
     depthpro-mlx photo.jpg --effects all --ply      # + dolly zoom, refocus, point cloud
     depthpro-mlx photo.jpg --effects refocus --gif  # just the focus pull, also as GIF
+    depthpro-mlx clip.mp4 --duration 6              # stabilized video depth + cinematic refocus
 """
 
 from __future__ import annotations
@@ -25,8 +26,35 @@ from .geometry import depth_to_points, layered_points, save_ply
 from .io import colorize_depth, fit_width, load_image
 from .render import orbit_frames
 from .spatial import render_stereo, side_by_side, wiggle_frames, write_spatial_heic
+from .video import VIDEO_SUFFIXES, cinematic, read_frames, stabilize, video_depth
 
 EFFECTS = ("orbit", "dolly", "refocus")
+
+
+def run_video(args: argparse.Namespace) -> None:
+    """Video input: stabilized per-frame depth and cinematic refocus."""
+    out_dir = args.out_dir or args.image.with_name(args.image.stem + "_depthpro")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    frames, fps = read_frames(args.image, start=args.start, duration=args.duration, max_side=args.max_side)
+    print(f"{len(frames)} frames at {fps:.1f} fps")
+
+    model = load_model(args.weights)
+    t0 = time.perf_counter()
+    depths, f_px = video_depth(model, frames, f_px=args.f_px, progress=lambda i, n: print(f"  depth {i}/{n}", end="\r"))
+    depths = stabilize(frames, depths)
+    print(f"depth in {time.perf_counter() - t0:.0f}s (f={f_px:.0f}px, fixed for the clip)")
+    del model
+    mx.clear_cache()
+
+    np.savez_compressed(out_dir / "depth.npz", depth=np.stack(depths).astype(np.float16), f_px=f_px)
+    inv_range = tuple(np.percentile(np.concatenate([1 / d[::8, ::8].ravel() for d in depths]), [1, 99]))
+    depth_video = [colorize_depth(d, inv_range) for d in depths]  # one colour scale for the whole clip
+    iio.imwrite(out_dir / "depth.mp4", depth_video, fps=fps, codec="libx264", quality=8, macro_block_size=2)
+    if args.cinematic != "none":
+        focus_xy = tuple(float(v) for v in args.focus.split(","))
+        cine = [f for f, _ in cinematic(frames, depths, mode=args.cinematic, focus_xy=focus_xy)]
+        iio.imwrite(out_dir / "cinematic.mp4", cine, fps=fps, codec="libx264", quality=8, macro_block_size=2)
+    print(f"outputs -> {out_dir}")
 
 
 def main() -> None:
@@ -59,7 +87,20 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=1280, help="video width")
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--amplitude", type=float, default=0.06, help="camera motion, fraction of subject depth")
+    video = parser.add_argument_group("video input")
+    video.add_argument("--start", type=float, default=0.0, help="seconds into the clip")
+    video.add_argument("--duration", type=float, default=None, help="seconds to process (default: all)")
+    video.add_argument(
+        "--cinematic",
+        choices=["track", "pull", "none"],
+        default="track",
+        help="track: keep the subject at --focus sharp; pull: rack focus near to far",
+    )
+    video.add_argument("--focus", default="0.5,0.5", help="subject position for --cinematic track, as x,y in 0..1")
+    video.add_argument("--max-side", type=int, default=960, help="process frames at this size (long side)")
     args = parser.parse_args()
+    if args.image.suffix.lower() in VIDEO_SUFFIXES:
+        return run_video(args)
     effects = EFFECTS if args.effects == "all" else () if args.effects == "none" else tuple(args.effects.split(","))
     unknown = set(effects) - set(EFFECTS)
     if unknown:
