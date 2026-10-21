@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it and the original Depth Pro paper."
+title: "depthpro-mlx: Apple Depth Pro on MLX"
+type: software
+authors:
+  - family-names: "Nguyễn"
+    given-names: "Đình Toàn"
+repository-code: "https://github.com/ntoantoan/depthpro-mlx"
+license: MIT
+version: 0.2.0
+date-released: 2026-10-21
+references:
+  - type: conference-paper
+    title: "Depth Pro: Sharp Monocular Metric Depth in Less Than a Second"
+    authors:
+      - family-names: Bochkovskii
+        given-names: Aleksei
+      - family-names: Delaunoy
+        given-names: Amaël
+      - family-names: Germain
+        given-names: Hugo
+      - family-names: Santos
+        given-names: Marcel
+      - family-names: Zhou
+        given-names: Yichao
+      - family-names: Richter
+        given-names: Stephan R.
+      - family-names: Koltun
+        given-names: Vladlen
+    conference:
+      name: "International Conference on Learning Representations (ICLR)"
+    year: 2025
+    url: "https://arxiv.org/abs/2410.02073"

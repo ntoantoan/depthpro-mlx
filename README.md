@@ -8,6 +8,7 @@ Apple's [Depth Pro](https://github.com/apple/ml-depth-pro) ported to [MLX](https
 
 <img src="assets/hero.webp" width="100%" alt="Photo to Depth Pro depth map to 3D parallax video, incense village in Vietnam">
 
+[![CI](https://github.com/ntoantoan/depthpro-mlx/actions/workflows/ci.yml/badge.svg)](https://github.com/ntoantoan/depthpro-mlx/actions/workflows/ci.yml)
 [![HF weights](https://img.shields.io/badge/🤗%20weights-ntoan199%2FDepthPro--mlx-yellow)](https://huggingface.co/ntoan199/DepthPro-mlx)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-MLX-black?logo=apple)
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
@@ -47,7 +48,7 @@ Sanity check: the rear wheel above measures **63 cm**, and real 26–28″ bicyc
 
 **[▶ Try the live demo](https://huggingface.co/spaces/ntoan199/depthpro-mlx-demo)**: eight scenes from Vietnam. Drag, move the mouse, or tilt your phone; press **Depth** or **Measure**.
 
-`--web` writes a single self-contained `viewer.html` (WebGL2, no dependencies, ~2 MB) with the photo and depth embedded. It works offline from `file://` and is easy to share; `scripts/build_demo.py` rebuilds the demo site. Where the mesh stretches across a depth edge, the shader switches to an inpainted background layer instead of smearing the subject.
+`--web` writes a single self-contained `viewer.html` (WebGL2, no dependencies, ~2 MB) with the photo and depth embedded. It works offline from `file://` and is easy to share; `tools/media/build_demo.py` rebuilds the demo site. Where the mesh stretches across a depth edge, the shader switches to an inpainted background layer instead of smearing the subject.
 
 ## Why
 
@@ -115,11 +116,11 @@ Depth Pro runs a DINOv2-L ViT over 37 overlapping 384 px tiles, so it is compute
 Reproduce:
 
 ```bash
-uv sync --group dev
 bash third_party/get_reference.sh            # clones apple/ml-depth-pro + checkpoint
-uv run python scripts/bench_torch.py --save outputs/ref_depth_fp32.npy
-uv run python -m depthpro_mlx.convert         # torch checkpoint -> weights/depth_pro.safetensors
-uv run python scripts/parity.py --dtype float16
+uv sync --group reference
+uv run python tools/bench/bench_torch.py --save outputs/ref_depth_fp32.npy
+uv run python -m depthpro_mlx.model.convert   # torch checkpoint -> weights/depth_pro.safetensors
+uv run python tools/bench/parity.py --dtype float16
 ```
 
 ## How it works
@@ -131,6 +132,10 @@ uv run python scripts/parity.py --dtype float16
 5. **Refocus.** Thin-lens circle of confusion `r = k·|1/z − 1/z_f|` on a precomputed stack of disk-blurred images in linear light, with a highlight boost for bokeh. The focus sweeps uniformly in diopters.
 6. **Spatial photo.** Two parallel pinhole cameras at ±31.5 mm render the eyes; a small Swift helper writes them with ImageIO as a `StereoPair` group with `SimplifiedPinhole` intrinsics and extrinsics, compiled once and cached in `~/.cache/depthpro-mlx`.
 7. **Web viewer.** A grid mesh unprojected from 16-bit inverse depth packed into a PNG, drawn with WebGL2. The camera radius uses the same parallax cap as the offline renderer.
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md): `uv sync`, then `uv run pytest -m "not slow"` (no weights needed) and `uv run ruff check`. CI runs on Apple Silicon GitHub runners.
 
 ## Credits
 
