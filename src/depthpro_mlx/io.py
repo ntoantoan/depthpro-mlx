@@ -27,10 +27,14 @@ def load_image(path: str | Path) -> tuple[np.ndarray, float | None]:
     return img, f_px
 
 
-def colorize_depth(depth: np.ndarray) -> np.ndarray:
-    """Inverse depth, robustly normalized, turbo colormap. Returns RGB uint8."""
+def colorize_depth(depth: np.ndarray, inv_range: tuple[float, float] | None = None) -> np.ndarray:
+    """Inverse depth on the turbo colormap. Returns RGB uint8.
+
+    ``inv_range`` fixes the (near, far) inverse-depth limits, e.g. to keep colours
+    consistent across a video; by default the 1st-99th percentiles are used.
+    """
     inv = 1.0 / np.clip(depth, 1e-3, None)
-    lo, hi = np.percentile(inv, [1, 99])
+    lo, hi = inv_range if inv_range is not None else np.percentile(inv, [1, 99])
     norm = np.clip((inv - lo) / (hi - lo + 1e-8), 0, 1)
     return cv2.cvtColor(cv2.applyColorMap((norm * 255).astype(np.uint8), cv2.COLORMAP_TURBO), cv2.COLOR_BGR2RGB)
 
