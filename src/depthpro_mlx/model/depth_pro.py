@@ -19,6 +19,27 @@ HOOK_BLOCK_IDS = (5, 11)
 DECODER_FEATURES = 256
 
 
+def _rows_tiled(fn, inputs: list[mx.array], tiles: int, halo: int, scale: int = 1) -> mx.array:
+    """Apply a convolutional ``fn`` to NHWC ``inputs`` in horizontal strips.
+
+    Each strip carries ``halo`` extra rows on both sides (at least the stack's
+    receptive-field radius), which are cropped from the output, so the result is
+    identical to one call while the peak memory of large convolutions drops
+    roughly ``tiles``-fold. ``scale`` is the output/input height ratio.
+    """
+    h = inputs[0].shape[1]
+    step = -(-h // tiles)
+    parts = []
+    for top in range(0, h, step):
+        a, b = max(0, top - halo), min(h, top + step + halo)
+        out = fn(*[x[:, a:b] for x in inputs])
+        rows = min(step, h - top)
+        out = out[:, (top - a) * scale : (top - a + rows) * scale]
+        mx.eval(out)
+        parts.append(out)
+    return mx.concatenate(parts, axis=1)
+
+
 def _apply(layers: list, x: mx.array) -> mx.array:
     for layer in layers:
         x = layer(x)
@@ -40,6 +61,7 @@ class DepthProEncoder(nn.Module):
 
     def __init__(self, dims_encoder=ENCODER_DIMS, decoder_features: int = DECODER_FEATURES):
         super().__init__()
+        self.patch_batch: int | None = None  # tiles per ViT batch; None = all 37 at once
         self.dims_encoder = list(dims_encoder)
         self.patch_encoder = ViT()
         self.image_encoder = ViT()
@@ -57,6 +79,27 @@ class DepthProEncoder(nn.Module):
     @property
     def img_size(self) -> int:
         return self.patch_encoder.img_size * 4  # 1536
+
+    def _encode_patches(self, pyramid: mx.array) -> tuple[mx.array, mx.array, mx.array]:
+        """Run the shared ViT over all pyramid tiles, ``patch_batch`` tiles at a time.
+
+        One batch of 37 tiles is fastest on a GPU; on CPU (float32) it peaks around
+        15 GB, so smaller batches, evaluated one by one, keep memory low with
+        identical results.
+        """
+        n = pyramid.shape[0]
+        step = self.patch_batch or n
+        outs, h0s, h1s = [], [], []
+        for i in range(0, n, step):
+            tokens, (h0, h1) = self.patch_encoder(pyramid[i : i + step], return_blocks=HOOK_BLOCK_IDS)
+            if step < n:
+                mx.eval(tokens, h0, h1)  # materialize so the chunk's activations can be freed
+            outs.append(tokens)
+            h0s.append(h0)
+            h1s.append(h1)
+        if len(outs) == 1:
+            return outs[0], h0s[0], h1s[0]
+        return mx.concatenate(outs), mx.concatenate(h0s), mx.concatenate(h1s)
 
     @staticmethod
     def split(x: mx.array, overlap_ratio: float) -> mx.array:
@@ -100,7 +143,7 @@ class DepthProEncoder(nn.Module):
         n0, n1 = x0_patches.shape[0], x1_patches.shape[0]
 
         pyramid = mx.concatenate([x0_patches, x1_patches, x2_patches], axis=0)
-        tokens, (hook0, hook1) = self.patch_encoder(pyramid, return_blocks=HOOK_BLOCK_IDS)
+        tokens, hook0, hook1 = self._encode_patches(pyramid)
         encodings = tokens_to_grid(tokens, self.out_size)
 
         latent0 = self.merge(tokens_to_grid(hook0, self.out_size)[: b * 25], b, padding=3)
@@ -172,12 +215,23 @@ class MultiresConvDecoder(nn.Module):
         self.convs = convs
         self.fusions = [FeatureFusionBlock2d(dim_decoder, deconv=(i != 0)) for i in range(len(dims_encoder))]
 
-    def __call__(self, encodings: list[mx.array]) -> tuple[mx.array, mx.array]:
+    def __call__(self, encodings: list[mx.array], tiles: int | None = None) -> tuple[mx.array, mx.array]:
         features = self.convs[-1](encodings[-1])
         lowres_features = features
         features = self.fusions[-1](features)
         for i in range(len(encodings) - 2, -1, -1):
-            features = self.fusions[i](features, self.convs[i](encodings[i]))
+            if tiles and i <= 2:  # the 768, 384 and 192 px levels hold the decoder's big convolutions
+                # conv (level 1 only), resnet1 and resnet2 (2 convs each): radius <= 5 input rows.
+                # Level 1 also upsamples 2x (deconv), so its output strips are twice as tall.
+                features = _rows_tiled(
+                    lambda f, e, i=i: self.fusions[i](f, self.convs[i](e)),
+                    [features, encodings[i]],
+                    tiles,
+                    halo=6,
+                    scale=2 if self.fusions[i].use_deconv else 1,
+                )
+            else:
+                features = self.fusions[i](features, self.convs[i](encodings[i]))
         return features, lowres_features
 
 
@@ -221,6 +275,7 @@ class DepthPro(nn.Module):
         ]
         if use_fov_head:
             self.fov = FOVNetwork(d)
+        self.tiles: int | None = None  # low-memory mode: decode in this many horizontal strips
 
     @property
     def img_size(self) -> int:
@@ -230,8 +285,14 @@ class DepthPro(nn.Module):
         """x: (B, 1536, 1536, 3) normalized to [-1, 1].
         Returns canonical inverse depth (B, 1536, 1536, 1) and FOV in degrees (B,)."""
         encodings = self.encoder(x)
-        features, features_0 = self.decoder(encodings)
-        canonical_inverse_depth = _apply(self.head, features)
+        features, features_0 = self.decoder(encodings, tiles=self.tiles)
+        if self.tiles:
+            # conv3x3 (1 row), 2x deconv, conv3x3 (1 row at 2x): radius 2 input rows; output is 2x taller.
+            canonical_inverse_depth = _rows_tiled(
+                lambda f: _apply(self.head, f), [features], self.tiles, halo=4, scale=2
+            )
+        else:
+            canonical_inverse_depth = _apply(self.head, features)
         fov_deg = None
         if hasattr(self, "fov"):
             fov_deg = self.fov(x, mx.stop_gradient(features_0)).reshape(-1)

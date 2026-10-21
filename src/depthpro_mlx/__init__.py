@@ -16,7 +16,7 @@ import numpy as np
 from .hub import HF_REPO, WEIGHTS_FILE, resolve_weights
 from .model import DepthPro
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 __all__ = [
     "HF_REPO",
     "WEIGHTS_FILE",
@@ -29,9 +29,26 @@ __all__ = [
 ]
 
 
-def load_model(weights: str | Path | None = None, dtype: mx.Dtype = mx.float16) -> DepthPro:
-    """Load MLX weights: a converted local file, or the published ones from the Hub."""
+def default_dtype() -> mx.Dtype:
+    """float16 on a GPU (Metal or CUDA); float32 on CPU, where BLAS only accelerates float32."""
+    return mx.float16 if mx.default_device().type == mx.DeviceType.gpu else mx.float32
+
+
+def load_model(
+    weights: str | Path | None = None, dtype: mx.Dtype | None = None, patch_batch: int | None = None
+) -> DepthPro:
+    """Load MLX weights: a converted local file, or the published ones from the Hub.
+
+    ``dtype`` defaults to :func:`default_dtype` (float16 on GPU, float32 on CPU).
+    ``patch_batch`` limits how many of the 37 image tiles go through the ViT at
+    once (lower = less memory, same result); defaults to all on GPU and 8 on CPU. Setting it,
+    or running on CPU, also decodes in strips, so float32 peaks around 7.6 GB instead of 15 GB.
+    """
+    dtype = dtype or default_dtype()
     model = DepthPro()
+    on_gpu = mx.default_device().type == mx.DeviceType.gpu
+    model.encoder.patch_batch = patch_batch if patch_batch is not None else (None if on_gpu else 8)
+    model.tiles = None if on_gpu and patch_batch is None else 12  # strip-wise decoding when saving memory
     model.load_weights(str(resolve_weights(weights)), strict=True)
     model.set_dtype(dtype)
     model.eval()
