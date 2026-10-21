@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>depthpro-mlx · 3D from one photo</title>
+<meta name="description" content="Apple Depth Pro on MLX: metric depth from a single photo, explored in 3D in your browser.">
+<style>
+  :root { color-scheme: dark; --bg: #09090b; --fg: #f4f4f5; --muted: #a1a1aa; --card: #18181b; --line: #27272a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
+  .lede { color: var(--muted); max-width: 640px; margin: 0 0 24px; }
+  .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 40px; }
+  .btn { display: inline-block; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg); text-decoration: none; font-weight: 500; }
+  .btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  code { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+  .card { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; color: inherit; text-decoration: none; transition: transform .2s, border-color .2s; }
+  .card:hover, .card:focus-visible { transform: translateY(-2px); border-color: #52525b; }
+  .card img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; }
+  .card div { padding: 12px 14px; }
+  .card strong { display: block; }
+  .card span { color: var(--muted); font-size: 14px; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 14px; }
+  footer a { color: var(--fg); }
+</style>
+</head>
+<body>
+<main>
+  <h1>One photo, explored in 3D.</h1>
+  <p class="lede">Each scene below is a single ordinary photo. <a href="https://github.com/apple/ml-depth-pro" style="color:inherit">Depth Pro</a>, running on a Mac with MLX, estimated its depth in meters, and your browser turns that into a 3D view. Move your mouse, drag, or tilt your phone. Press <strong>Measure</strong> and click two points to get real distances in meters.</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/ntoantoan/depthpro-mlx">GitHub · depthpro-mlx</a>
+    <a class="btn" href="https://huggingface.co/ntoan199/DepthPro-mlx">🤗 MLX weights</a>
+  </div>
+  <p class="lede">Make your own: <code>depthpro-mlx photo.jpg --web</code></p>
+
+  <div class="grid" id="grid">
+    <a class="card" href="scenes/incense_village.html"><img src="thumbs/incense_village.jpg" alt="" loading="lazy"><div><strong>Incense village</strong><span>Quảng Phú Cầu, Hà Nội</span></div></a>
+    <a class="card" href="scenes/hoi_an_lanterns.html"><img src="thumbs/hoi_an_lanterns.jpg" alt="" loading="lazy"><div><strong>Lantern street</strong><span>Hội An</span></div></a>
+    <a class="card" href="scenes/hue_citadel.html"><img src="thumbs/hue_citadel.jpg" alt="" loading="lazy"><div><strong>Imperial City</strong><span>Huế</span></div></a>
+    <a class="card" href="scenes/douc_langur.html"><img src="thumbs/douc_langur.jpg" alt="" loading="lazy"><div><strong>Douc langurs</strong><span>Sơn Trà, Đà Nẵng</span></div></a>
+    <a class="card" href="scenes/ninh_binh_swan_boats.html"><img src="thumbs/ninh_binh_swan_boats.jpg" alt="" loading="lazy"><div><strong>Swan boats</strong><span>Ninh Bình</span></div></a>
+    <a class="card" href="scenes/hai_van_pass.html"><img src="thumbs/hai_van_pass.jpg" alt="" loading="lazy"><div><strong>Hải Vân Pass</strong><span>Đà Nẵng</span></div></a>
+    <a class="card" href="scenes/hanoi_fruit_vendor.html"><img src="thumbs/hanoi_fruit_vendor.jpg" alt="" loading="lazy"><div><strong>Street vendor</strong><span>Old Quarter, Hà Nội</span></div></a>
+    <a class="card" href="scenes/vietnamese_coffee.html"><img src="thumbs/vietnamese_coffee.jpg" alt="" loading="lazy"><div><strong>Cà phê phin</strong><span>Vietnamese drip coffee</span></div></a>
+  </div>
+
+  <footer>
+    Photos from Wikimedia Commons contributors under CC0 / CC BY / CC BY-SA. See <a href="https://github.com/ntoantoan/depthpro-mlx/blob/main/demo/CREDITS.md">credits</a>.
+    Depth Pro by Apple (Bochkovskii et al., ICLR 2025). Not affiliated with Apple.
+  </footer>
+</main>
+</body>
+</html>
