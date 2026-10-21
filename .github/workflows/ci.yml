@@ -31,4 +31,19 @@ jobs:
       - name: Unit tests
         run: uv run --no-sync pytest -m "not slow"
       - name: CLI entry point
-        run: uv run --no-sync depthpro-mlx --help
+        run: uv run --no-sync depthpro-mlx --version
+
+  docker:
+    # Build the CPU image (no push) so Dockerfile changes are checked on every PR.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: depthpro-mlx:ci
+          cache-from: type=gha,scope=ci
+          cache-to: type=gha,mode=max,scope=ci
+      - run: docker run --rm depthpro-mlx:ci --version
