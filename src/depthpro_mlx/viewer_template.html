@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>__TITLE__ · depthpro-mlx</title>
+<style>
+  :root { color-scheme: dark; --fg: #f4f4f5; --muted: #a1a1aa; --chip: rgba(24,24,27,.74); --line: rgba(255,255,255,.14); --accent: #facc15; }
+  html, body { margin: 0; height: 100%; background: #09090b; color: var(--fg); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+  canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; touch-action: none; }
+  #gl { cursor: grab; }
+  #gl:active { cursor: grabbing; }
+  body.measuring #gl { cursor: crosshair; }
+  #overlay { pointer-events: none; }
+  .bar { position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; pointer-events: none; }
+  .chip { pointer-events: auto; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  button.chip { color: var(--fg); font: inherit; cursor: pointer; }
+  button.chip[aria-pressed="true"] { background: var(--fg); color: #09090b; }
+  .title { font-weight: 600; }
+  .hint { color: var(--muted); }
+  .spacer { flex: 1; }
+  a { color: var(--fg); }
+  #err { position: fixed; inset: 0; display: none; place-items: center; text-align: center; padding: 24px; color: var(--muted); }
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="Interactive 3D view of the photo"></canvas>
+<canvas id="overlay" aria-hidden="true"></canvas>
+<div id="err">WebGL2 is not available in this browser.</div>
+<div class="bar">
+  <span class="chip title">__TITLE__</span>
+  <button class="chip" id="mode" aria-pressed="false">Depth</button>
+  <button class="chip" id="measure" aria-pressed="false">Measure</button>
+  <button class="chip" id="motion" hidden>Use device motion</button>
+  <span class="chip hint" id="hint" aria-live="polite">Drag or move to look around</span>
+  <span class="spacer"></span>
+  <span class="chip hint">Depth Pro on MLX · <a href="https://github.com/ntoantoan/depthpro-mlx" target="_blank" rel="noopener">depthpro-mlx</a></span>
+</div>
+<script>
+const P = __PARAMS__;
+const SRC = {
+  image: "data:image/jpeg;base64,__IMAGE__",
+  depth: "data:image/png;base64,__DEPTH__",
+  bgImage: "data:image/jpeg;base64,__BG_IMAGE__",
+};
+
+const canvas = document.getElementById("gl");
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
+const hint = document.getElementById("hint");
+const gl = canvas.getContext("webgl2", { antialias: true });
+if (!gl) { document.getElementById("err").style.display = "grid"; throw new Error("no webgl2"); }
+
+const loadImage = src => new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = reject; im.src = src; });
+
+// Decode 16-bit inverse depth (R = high byte, G = low byte) into metric depth.
+function decodeDepth(img) {
+  const cv = document.createElement("canvas"); cv.width = img.width; cv.height = img.height;
+  const ctx = cv.getContext("2d", { willReadFrequently: true }); ctx.drawImage(img, 0, 0);
+  const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
+  const z = new Float32Array(cv.width * cv.height), t = new Float32Array(cv.width * cv.height);
+  for (let i = 0; i < z.length; i++) {
+    t[i] = (px[4 * i] * 256 + px[4 * i + 1]) / 65535;
+    z[i] = 1 / (P.invMin + t[i] * (P.invMax - P.invMin));
+  }
+  return { w: cv.width, h: cv.height, z, t };
+}
+function sampleDepth(D, u, v) {             // bilinear, u,v in [0,1]
+  const x = Math.min(D.w - 1.001, Math.max(0, u * (D.w - 1))), y = Math.min(D.h - 1.001, Math.max(0, v * (D.h - 1)));
+  const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, i = y0 * D.w + x0;
+  const a = D.z[i], b = D.z[i + 1], c = D.z[i + D.w], d = D.z[i + D.w + 1];
+  return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+}
+function robustDepth(D, u, v) {          // median of a 5x5 window: clicks on thin gaps don't hit the background
+  const cx = Math.round(u * (D.w - 1)), cy = Math.round(v * (D.h - 1)), vals = [];
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const x = Math.min(D.w - 1, Math.max(0, cx + dx)), y = Math.min(D.h - 1, Math.max(0, cy + dy));
+    vals.push(D.z[y * D.w + x]);
+  }
+  vals.sort((a, b) => a - b);
+  return vals[12];
+}
+function compress(z) { return P.pivot * Math.pow(z / P.pivot, P.gamma); }   // render-only depth
+function unproject(u, v, z) { return [(u * P.width - P.width / 2) / P.f * z, -(v * P.height - P.height / 2) / P.f * z, -z]; }
+
+// Grid mesh; for the foreground, triangles spanning a depth jump are dropped so the background shows through.
+function buildMesh(D) {
+  const cols = P.grid, rows = Math.round(cols * P.height / P.width);
+  const n = (cols + 1) * (rows + 1);
+  const pos = new Float32Array(n * 3), uv = new Float32Array(n * 2), inv = new Float32Array(n), lz = new Float32Array(n);
+  for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
+    const k = j * (cols + 1) + i, u = i / cols, v = j / rows, z = sampleDepth(D, u, v);
+    pos.set(unproject(u, v, compress(z)), 3 * k); uv[2 * k] = u; uv[2 * k + 1] = v;
+    inv[k] = (1 / z - P.invMin) / (P.invMax - P.invMin); lz[k] = Math.log(z);
+  }
+  // Edge strength: largest log-depth step to an 8-neighbour. Interpolated across triangles,
+  // it gives the shader a smooth (not per-triangle) measure of "near a depth edge".
+  const edge = new Float32Array(n);
+  for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
+    const k = j * (cols + 1) + i; let m = 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const jj = j + dj, ii = i + di;
+      if (jj < 0 || jj > rows || ii < 0 || ii > cols) continue;
+      m = Math.max(m, Math.abs(lz[jj * (cols + 1) + ii] - lz[k]));
+    }
+    edge[k] = m;
+  }
+  const idx = new Uint32Array(cols * rows * 6);
+  let c = 0;
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const a = j * (cols + 1) + i, b = a + 1, cc = a + cols + 1, d = cc + 1;
+    idx[c++] = a; idx[c++] = cc; idx[c++] = b; idx[c++] = b; idx[c++] = cc; idx[c++] = d;
+  }
+  return { pos, uv, inv, edge, idx };
+}
+
+const VS = `#version 300 es
+in vec3 aPos; in vec2 aUV; in float aInv; in float aEdge;
+uniform mat4 uMVP; uniform float uPush;
+out vec2 vUV; out float vInv; out float vEdge;
+void main() { vUV = aUV; vInv = aInv; vEdge = aEdge; gl_Position = uMVP * vec4(aPos * uPush, 1.0); }`;
+const FS = `#version 300 es
+precision highp float;
+in vec2 vUV; in float vInv; in float vEdge;
+uniform sampler2D uImage; uniform sampler2D uBackground; uniform float uDepthMix; uniform vec2 uTexelsPerPixel;
+uniform float uOffAxis;
+out vec4 outColor;
+vec3 turbo(float x) {
+  x = clamp(x, 0.0, 1.0);
+  vec4 v4 = vec4(1.0, x, x * x, x * x * x); vec2 v2 = v4.zw * v4.z;
+  return vec3(
+    dot(v4, vec4(0.13572138, 4.61539260, -42.66032258, 132.13108234)) + dot(v2, vec2(-152.94239396, 59.28637943)),
+    dot(v4, vec4(0.09140261, 2.19418839, 4.84296658, -14.18503333)) + dot(v2, vec2(4.27729857, 2.82956604)),
+    dot(v4, vec4(0.10667330, 12.64194608, -60.58204836, 110.36276771)) + dot(v2, vec2(-89.90310912, 27.34824973)));
+}
+void main() {
+  // A stretched triangle (depth discontinuity seen from a new angle) covers many pixels
+  // with almost no change in UV. Show the inpainted background there instead of the smear.
+  vec2 rate = fwidth(vUV) / uTexelsPerPixel;               // ~1 on undistorted surfaces
+  float minRate = min(rate.x, rate.y);
+  // Outside the edge bands the background texture *is* the photo, so false positives are
+  // harmless and the threshold can be generous.
+  float stretch = 1.0 - smoothstep(0.5, 0.95, minRate);
+  // Smooth term: near depth edges and only where the surface is actually being stretched,
+  // fade to the background as the camera leaves the photo's viewpoint (no halo on the subject).
+  float nearEdge = smoothstep(0.02, 0.12, vEdge) * uOffAxis * (1.0 - smoothstep(0.7, 1.0, minRate));
+  stretch = max(stretch, nearEdge);
+  vec3 photo = mix(texture(uImage, vUV).rgb, texture(uBackground, vUV).rgb, stretch);
+  outColor = vec4(mix(photo, turbo(vInv), uDepthMix), 1.0);
+}`;
+
+function compile(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function perspective(fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+  return [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0];
+}
+function lookAt(e, t) {
+  let zx = e[0] - t[0], zy = e[1] - t[1], zz = e[2] - t[2];
+  let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+  let xx = zz, xy = 0, xz = -zx; l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+  const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+  return [xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0,
+    -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1];
+}
+function mul(a, b) {
+  const o = new Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; }
+  return o;
+}
+
+(async function main() {
+  const [img, depthImg, bgImg] = await Promise.all([SRC.image, SRC.depth, SRC.bgImage].map(loadImage));
+  const D = decodeDepth(depthImg);
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const uMVP = gl.getUniformLocation(prog, "uMVP"), uDepthMix = gl.getUniformLocation(prog, "uDepthMix"), uPush = gl.getUniformLocation(prog, "uPush");
+
+  function upload(mesh, image) {
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    for (const [name, data, size] of [["aPos", mesh.pos, 3], ["aUV", mesh.uv, 2], ["aInv", mesh.inv, 1], ["aEdge", mesh.edge, 1]]) {
+      const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(prog, name); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
+    }
+    const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.idx, gl.STATIC_DRAW);
+    const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image); gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return { vao, tex, count: mesh.idx.length };
+  }
+  const layer = upload(buildMesh(D), img);
+  const bgTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, bgTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, bgImg); gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(gl.getUniformLocation(prog, "uImage"), 0); gl.uniform1i(gl.getUniformLocation(prog, "uBackground"), 1);
+  const uTexelsPerPixel = gl.getUniformLocation(prog, "uTexelsPerPixel"), uOffAxis = gl.getUniformLocation(prog, "uOffAxis");
+  gl.enable(gl.DEPTH_TEST);
+
+  // ---- interaction ----
+  let target = [0, 0], current = [0, 0], lastInput = -1e9, depthMix = 0, depthTarget = 0, measuring = false, pts = [];
+  const steer = (x, y) => { target = [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))]; lastInput = performance.now(); };
+  canvas.addEventListener("pointermove", e => {
+    if (!measuring && (e.pointerType === "mouse" || e.buttons)) steer(2 * e.clientX / innerWidth - 1, 2 * e.clientY / innerHeight - 1);
+  });
+  canvas.addEventListener("pointerleave", () => { lastInput = -1e9; });
+  const onOrient = e => { if (!measuring && e.gamma != null) steer(e.gamma / 25, (e.beta - 45) / 25); };
+  const motionBtn = document.getElementById("motion");
+  if (typeof DeviceOrientationEvent !== "undefined") {
+    if (typeof DeviceOrientationEvent.requestPermission === "function") {
+      motionBtn.hidden = false;
+      motionBtn.onclick = async () => { if (await DeviceOrientationEvent.requestPermission() === "granted") { addEventListener("deviceorientation", onOrient); motionBtn.hidden = true; } };
+    } else addEventListener("deviceorientation", onOrient);
+  }
+  const modeBtn = document.getElementById("mode");
+  modeBtn.onclick = () => { depthTarget = depthTarget ? 0 : 1; modeBtn.setAttribute("aria-pressed", String(!!depthTarget)); };
+
+  // Measure: the camera returns to the photo's own viewpoint so a click maps straight to a pixel.
+  const measureBtn = document.getElementById("measure");
+  function setMeasuring(on) {
+    measuring = on; pts = []; document.body.classList.toggle("measuring", on);
+    measureBtn.setAttribute("aria-pressed", String(on));
+    hint.textContent = on ? "Click two points to measure the real distance" : "Drag or move to look around";
+  }
+  measureBtn.onclick = () => setMeasuring(!measuring);
+  function measure() {
+    if (pts.length < 2) return null;
+    let [za, zb] = pts.map(q => q.z);
+    const samePlane = Math.abs(za - zb) / Math.min(za, zb) < 0.1;   // depth noise dominates small differences
+    if (samePlane) za = zb = (za + zb) / 2;
+    const a = unproject(pts[0].u, pts[0].v, za), b = unproject(pts[1].u, pts[1].v, zb);
+    return { d: Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]), samePlane };
+  }
+  function addPoint(u, v) {
+    if (pts.length === 2) pts = [];
+    pts.push({ u, v, z: robustDepth(D, u, v) });
+    if (pts.length === 1) hint.textContent = `${pts[0].z.toFixed(2)} m from the camera · click a second point`;
+    else {
+      const m = measure();
+      hint.textContent = `Distance ≈ ${fmt(m.d)}${m.samePlane ? " (same plane)" : ""} · estimated from one photo`;
+    }
+  }
+  canvas.addEventListener("click", e => {
+    if (!measuring) return;
+    const uv = screenToUV(e.clientX, e.clientY);
+    if (uv) addPoint(uv[0], uv[1]);
+  });
+  const fmt = d => d < 1 ? `${(d * 100).toFixed(0)} cm` : `${d.toFixed(2)} m`;
+  function uvToScreen(u, v) {
+    const t = Math.tan(view.fovy / 2);
+    return [((u * P.width - P.width / 2) / (P.f * view.aspect * t) + 1) * innerWidth / 2,
+            (1 - (P.height / 2 - v * P.height) / (P.f * t)) * innerHeight / 2];
+  }
+
+  let view = { fovy: 1, aspect: 1 };
+  function screenToUV(x, y) {
+    const ndcX = 2 * x / innerWidth - 1, ndcY = 1 - 2 * y / innerHeight, t = Math.tan(view.fovy / 2);
+    const u = (ndcX * view.aspect * t * P.f + P.width / 2) / P.width;
+    const v = (P.height / 2 - ndcY * t * P.f) / P.height;
+    return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? [u, v] : null;
+  }
+
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    for (const c of [canvas, overlay]) { c.width = Math.round(innerWidth * dpr); c.height = Math.round(innerHeight * dpr); }
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  addEventListener("resize", resize); resize();
+
+  function drawOverlay() {
+    octx.clearRect(0, 0, innerWidth, innerHeight);
+    if (!measuring || !pts.length) return;
+    const xy = pts.map(q => uvToScreen(q.u, q.v));
+    octx.lineWidth = 2; octx.strokeStyle = "#facc15"; octx.fillStyle = "#facc15";
+    if (xy.length === 2) { octx.beginPath(); octx.moveTo(...xy[0]); octx.lineTo(...xy[1]); octx.stroke(); }
+    for (const q of xy) { octx.beginPath(); octx.arc(q[0], q[1], 5, 0, 2 * Math.PI); octx.fill(); }
+    if (xy.length === 2) {
+      const label = fmt(measure().d), mx = (xy[0][0] + xy[1][0]) / 2, my = (xy[0][1] + xy[1][1]) / 2;
+      octx.font = "600 15px -apple-system, sans-serif";
+      const w = octx.measureText(label).width + 16;
+      octx.fillStyle = "rgba(9,9,11,.85)"; octx.fillRect(mx - w / 2, my - 32, w, 24);
+      octx.fillStyle = "#facc15"; octx.fillText(label, mx - w / 2 + 8, my - 15);
+    }
+  }
+
+  const query = new URLSearchParams(location.search);   // ?pose=x,y pins the view, ?depth=1 starts in depth mode, ?measure=...
+  const pinned = query.get("pose") ? query.get("pose").split(",").map(Number) : null;
+  if (query.get("depth") === "1") modeBtn.click();
+  if (query.get("measure")) {                            // ?measure=u1,v1,u2,v2 (shareable measurement)
+    const m = query.get("measure").split(",").map(Number);
+    setMeasuring(true); addPoint(m[0], m[1]); addPoint(m[2], m[3]);
+  }
+  const fovPhoto = 2 * Math.atan(P.height / (2 * P.f));
+
+  function frame(now) {
+    if (measuring) target = [0, 0];
+    else if (pinned) { target = pinned; current = pinned.slice(); }
+    else if (now - lastInput > 2500) { const t = now / 1000; target = [0.85 * Math.sin(t * 0.7), 0.45 * Math.sin(t * 1.4)]; }
+    const k = measuring ? 0.2 : 0.08;
+    current[0] += (target[0] - current[0]) * k; current[1] += (target[1] - current[1]) * k;
+    depthMix += (depthTarget - depthMix) * 0.12;
+
+    const aspect = canvas.width / canvas.height, photoAspect = P.width / P.height;
+    const crop = measuring ? 1 : P.crop;
+    let fovy = fovPhoto / crop;
+    if (aspect > photoAspect) fovy = 2 * Math.atan(Math.tan(fovy / 2) * photoAspect / aspect);
+    view = { fovy, aspect };
+    const eye = [current[0] * P.radius, -current[1] * P.radius * 0.6, 0];
+    // Clip planes from the encoded depth range, so even a far sky (clamped at 1/invMin) is never cut.
+    const mvp = mul(perspective(fovy, aspect, 0.5 * compress(1 / P.invMax), 2 * compress(1 / P.invMin)), lookAt(eye, [0, 0, -P.pivot]));
+
+    gl.clearColor(0.035, 0.035, 0.043, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.uniformMatrix4fv(uMVP, false, new Float32Array(mvp)); gl.uniform1f(uDepthMix, depthMix);
+    // Expected UV change per screen pixel on an undistorted surface (photo fills the frame, scaled by crop).
+    const pxPerUV = canvas.height / (2 * Math.tan(fovy / 2) * P.f / P.height);
+    gl.uniform2f(uTexelsPerPixel, (P.height / P.width) / pxPerUV, 1 / pxPerUV);
+    gl.uniform1f(uOffAxis, Math.min(1, Math.hypot(current[0], current[1] * 0.6) * 1.5));
+    gl.uniform1f(uPush, 1.0); gl.bindVertexArray(layer.vao);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, layer.tex);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bgTex);
+    gl.drawElements(gl.TRIANGLES, layer.count, gl.UNSIGNED_INT, 0);
+    drawOverlay();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
