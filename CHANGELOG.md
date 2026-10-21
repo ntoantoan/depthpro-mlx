@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-21
+
+### Added
+- Published on PyPI: `pip install "depthpro-mlx[inpaint]"`.
+
+### Changed
+- README: per-component license table; Depth Pro weights are under Apple's terms (not OSI-approved,
+  commercial use not explicitly addressed). Absolute image links so the README renders on PyPI.
+
 ### Fixed
 - Wiggle previews no longer stutter: `spatial.wiggle_views()` renders real views gliding along the 63 mm
   baseline (with the background layer) instead of cross-fading the two eye images, which doubled edges
@@ -46,6 +55,7 @@ All notable changes to this project are documented here. The format follows
 - Single-file WebGL viewer with depth-range compression, stretch-aware background fill and a metric measuring tool.
 - `depthpro-mlx` CLI and a live demo on Hugging Face Spaces.
 
-[Unreleased]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ntoantoan/depthpro-mlx/releases/tag/v0.1.0

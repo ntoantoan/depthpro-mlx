@@ -6,7 +6,7 @@
 
 Apple's [Depth Pro](https://github.com/apple/ml-depth-pro) ported to [MLX](https://github.com/ml-explore/mlx), plus cinematic effects that only work because the depth is in *meters*, with no GPU server and no PyTorch.
 
-<img src="assets/hero.webp" width="100%" alt="Photo to Depth Pro depth map to 3D parallax video, incense village in Vietnam">
+<img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/hero.webp" width="100%" alt="Photo to Depth Pro depth map to 3D parallax video, incense village in Vietnam">
 
 [![CI](https://github.com/ntoantoan/depthpro-mlx/actions/workflows/ci.yml/badge.svg)](https://github.com/ntoantoan/depthpro-mlx/actions/workflows/ci.yml)
 [![HF weights](https://img.shields.io/badge/🤗%20weights-ntoan199%2FDepthPro--mlx-yellow)](https://huggingface.co/ntoan199/DepthPro-mlx)
@@ -21,9 +21,9 @@ All of these come from **one ordinary photo**.
 
 | Refocus after the shot | Dolly zoom ("vertigo") |
 |---|---|
-| <img src="assets/refocus_hoi_an.webp" width="100%" alt="Focus pull across a lantern street in Hoi An with round bokeh"> | <img src="assets/dolly_zoom_hue.webp" width="100%" alt="Dolly zoom: cyclist stays the same size while the courtyard behind swells"> |
+| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/refocus_hoi_an.webp" width="100%" alt="Focus pull across a lantern street in Hoi An with round bokeh"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/dolly_zoom_hue.webp" width="100%" alt="Dolly zoom: cyclist stays the same size while the courtyard behind swells"> |
 | A thin-lens focus pull. Because depth is metric, the label is the **real focus distance**. Lights bloom into round bokeh like a fast lens. | Hitchcock's camera move: pull back while zooming in, so the subject keeps its size and the background swells. Normally this needs a dolly track. |
-| <img src="assets/refocus_langur.webp" width="100%" alt="Rack focus from leaves to a red-shanked douc langur"> | <img src="assets/hai_van_pass.webp" width="100%" alt="3D parallax at Hai Van pass, leaves in front of the bay"> |
+| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/refocus_langur.webp" width="100%" alt="Rack focus from leaves to a red-shanked douc langur"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/hai_van_pass.webp" width="100%" alt="3D parallax at Hai Van pass, leaves in front of the bay"> |
 | Rack focus from foreground leaves to a red-shanked douc langur, 4.9 m → 18.9 m. | 3D parallax with depth-aware disocclusion filling. |
 
 ### Spatial photos for Apple Vision Pro and iPhone
@@ -32,7 +32,7 @@ All of these come from **one ordinary photo**.
 
 | Wiggle preview (left ↔ right eye) | |
 |---|---|
-| <img src="assets/wiggle_incense.webp" width="100%" alt="Left/right eye wiggle stereogram of the incense village"> | <img src="assets/wiggle_hue.webp" width="100%" alt="Left/right eye wiggle stereogram of the Hue citadel"> |
+| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/wiggle_incense.webp" width="100%" alt="Left/right eye wiggle stereogram of the incense village"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/wiggle_hue.webp" width="100%" alt="Left/right eye wiggle stereogram of the Hue citadel"> |
 
 AirDrop `spatial.heic` to a Vision Pro or iPhone 15 Pro or later to view it in 3D. A parallel side-by-side `stereo_sbs.jpg` is written too.
 
@@ -40,7 +40,7 @@ AirDrop `spatial.heic` to a Vision Pro or iPhone 15 Pro or later to view it in 3
 
 Metric depth turns every photo into something you can measure. In the viewer, press **Measure** and click two points:
 
-<img src="assets/measure_hue.jpg" width="100%" alt="Measuring a bicycle wheel as 63 cm in a photo taken from about 22 m away">
+<img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/measure_hue.jpg" width="100%" alt="Measuring a bicycle wheel as 63 cm in a photo taken from about 22 m away">
 
 Sanity check: the rear wheel above measures **63 cm**, and real 26–28″ bicycle wheels are 66–71 cm. That is from a single telephoto shot about 22 m away, with no reference object and no LiDAR. Measurements parallel to the image are the reliable kind; separations along the viewing direction pick up depth noise, which grows with distance. Points at nearly the same depth are treated as one plane for that reason. Measurements are shareable: `viewer.html?measure=u1,v1,u2,v2`.
 
@@ -50,7 +50,7 @@ Feed it a video. Depth Pro runs per frame with **one focal length for the whole 
 
 | Cinematic mode · Hà Nội train street | Video depth · the train leaves | Tracking focus · basket maker |
 |---|---|---|
-| <img src="assets/train_street_cinematic.webp" width="100%" alt="Focus pulls from a tourist at 0.9 m to the passing train at 3.8 m"> | <img src="assets/train_departure_depth.webp" width="100%" alt="Stabilized depth of a crowd on motorbikes as the train leaves"> | <img src="assets/basket_maker_cinematic.webp" width="100%" alt="Focus follows a craftsman weaving a basket"> |
+| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/train_street_cinematic.webp" width="100%" alt="Focus pulls from a tourist at 0.9 m to the passing train at 3.8 m"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/train_departure_depth.webp" width="100%" alt="Stabilized depth of a crowd on motorbikes as the train leaves"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/basket_maker_cinematic.webp" width="100%" alt="Focus follows a craftsman weaving a basket"> |
 
 ```bash
 depthpro-mlx clip.mp4 --duration 6 --cinematic track --focus 0.45,0.55
@@ -77,7 +77,7 @@ Moving the camera reveals things the photo never saw. Instead of stretching the 
 ## Quickstart
 
 ```bash
-pip install "depthpro-mlx[inpaint] @ git+https://github.com/ntoantoan/depthpro-mlx"
+pip install "depthpro-mlx[inpaint]"
 depthpro-mlx photo.jpg --effects all --spatial --web --ply
 ```
 
@@ -116,7 +116,7 @@ iPhone photos carry the focal length in EXIF; the CLI reads it automatically for
 
 | Swan boats, Ninh Bình | Imperial City, Huế | Douc langurs, Sơn Trà |
 |---|---|---|
-| <img src="assets/swan_boats.webp" width="100%" alt="3D parallax of abandoned swan boats"> | <img src="assets/hue_citadel.webp" width="100%" alt="3D parallax of a cyclist in Hue citadel"> | <img src="assets/douc_langur.webp" width="100%" alt="3D parallax of douc langurs on a branch"> |
+| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/swan_boats.webp" width="100%" alt="3D parallax of abandoned swan boats"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/hue_citadel.webp" width="100%" alt="3D parallax of a cyclist in Hue citadel"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/douc_langur.webp" width="100%" alt="3D parallax of douc langurs on a branch"> |
 
 ## Benchmarks
 
@@ -156,13 +156,13 @@ uv run python tools/bench/parity.py --dtype float16
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md): `uv sync`, then `uv run pytest -m "not slow"` (no weights needed) and `uv run ruff check`. CI runs on Apple Silicon GitHub runners.
+See [CONTRIBUTING.md](https://github.com/ntoantoan/depthpro-mlx/blob/main/CONTRIBUTING.md): `uv sync`, then `uv run pytest -m "not slow"` (no weights needed) and `uv run ruff check`. CI runs on Apple Silicon GitHub runners.
 
 ## Credits
 
 - [Depth Pro](https://arxiv.org/abs/2410.02073) by Bochkovskii et al., Apple. Weights are redistributed under Apple's [license](https://huggingface.co/ntoan199/DepthPro-mlx/blob/main/LICENSE). This project is not affiliated with Apple.
 - [LaMa](https://github.com/advimman/lama) by Suvorov et al. (Apache-2.0), via the ONNX port [Carve/LaMa-ONNX](https://huggingface.co/Carve/LaMa-ONNX).
-- Demo photos and videos: Wikimedia Commons contributors, see [assets/CREDITS.md](assets/CREDITS.md).
+- Demo photos and videos: Wikimedia Commons contributors, see [assets/CREDITS.md](https://github.com/ntoantoan/depthpro-mlx/blob/main/assets/CREDITS.md).
 
 ```bibtex
 @inproceedings{Bochkovskii2024:arxiv,
@@ -177,4 +177,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): `uv sync`, then `uv run pytest -m "not s
 
 ## License
 
-Code: MIT. Model weights: Apple's Depth Pro license.
+| Component | License |
+|---|---|
+| Code in this repository | [MIT](https://github.com/ntoantoan/depthpro-mlx/blob/main/LICENSE) (the model files are a port of Apple's sample code, used under its terms) |
+| Depth Pro weights (downloaded from the Hub) | Apple's [Depth Pro license](https://huggingface.co/ntoan199/DepthPro-mlx/blob/main/LICENSE), redistributed unchanged except for the format conversion |
+| LaMa weights (`inpaint` extra) | Apache-2.0 |
+| Demo photos and videos | CC0 / CC BY / CC BY-SA, see [assets/CREDITS.md](https://github.com/ntoantoan/depthpro-mlx/blob/main/assets/CREDITS.md) |
+
+The Depth Pro weights are **not** under an OSI-approved license. Apple grants a personal, non-exclusive license to use, modify and redistribute them, and does not explicitly address commercial use. If you plan to ship them in a product, read Apple's terms yourself and, if in doubt, ask a lawyer. This project is not affiliated with or endorsed by Apple.

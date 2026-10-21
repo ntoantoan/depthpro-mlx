@@ -24,3 +24,7 @@ dist/
 # generated demo site (published to the Hugging Face Space)
 demo/scenes/
 demo/thumbs/
+
+# test artifacts
+.coverage
+.pytest_cache/

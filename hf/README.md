@@ -22,7 +22,7 @@ Code, CLI and 3D photo pipeline: **[github.com/ntoantoan/depthpro-mlx](https://g
 ## Usage
 
 ```bash
-pip install git+https://github.com/ntoantoan/depthpro-mlx
+pip install "depthpro-mlx[inpaint]"
 depthpro-mlx photo.jpg --ply     # depth.png, pointcloud.ply, 3d.mp4
 ```
 
@@ -56,7 +56,7 @@ Parity against the official PyTorch implementation on the reference image (3024Ã
 
 ## License
 
-These weights are a format conversion of Apple's released Depth Pro weights and are redistributed under Apple's original license terms (see `LICENSE`). This conversion is not affiliated with or endorsed by Apple.
+These weights are a format conversion of Apple's released Depth Pro weights and are redistributed under Apple's original license terms (see `LICENSE`). That license is not OSI-approved: Apple grants a personal, non-exclusive license to use, modify and redistribute, and does not explicitly address commercial use, so check the terms before shipping the weights in a product. This conversion is not affiliated with or endorsed by Apple.
 
 ```bibtex
 @inproceedings{Bochkovskii2024:arxiv,
