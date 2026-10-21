@@ -21,7 +21,7 @@ All of these come from **one ordinary photo**.
 
 | Refocus after the shot | Dolly zoom ("vertigo") |
 |---|---|
-| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/refocus_hoi_an.webp" width="100%" alt="Focus pull across a lantern street in Hoi An with round bokeh"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/dolly_zoom_hue.webp" width="100%" alt="Dolly zoom: cyclist stays the same size while the courtyard behind swells"> |
+| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/refocus_hoi_an.webp" width="100%" alt="Focus pull across a lantern street in Hoi An with round bokeh"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/dolly_zoom_gate.webp" width="100%" alt="Dolly zoom: a gate of the Imperial City keeps its size while the gardens behind its arches swell"> |
 | A thin-lens focus pull. Because depth is metric, the label is the **real focus distance**. Lights bloom into round bokeh like a fast lens. | Hitchcock's camera move: pull back while zooming in, so the subject keeps its size and the background swells. Normally this needs a dolly track. |
 | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/refocus_langur.webp" width="100%" alt="Rack focus from leaves to a red-shanked douc langur"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/hai_van_pass.webp" width="100%" alt="3D parallax at Hai Van pass, leaves in front of the bay"> |
 | Rack focus from foreground leaves to a red-shanked douc langur, 4.9 m → 18.9 m. | 3D parallax with depth-aware disocclusion filling. |
@@ -32,7 +32,7 @@ All of these come from **one ordinary photo**.
 
 | Wiggle preview (left ↔ right eye) | |
 |---|---|
-| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/wiggle_incense.webp" width="100%" alt="Left/right eye wiggle stereogram of the incense village"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/wiggle_hue.webp" width="100%" alt="Left/right eye wiggle stereogram of the Hue citadel"> |
+| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/wiggle_incense.webp" width="100%" alt="Left/right eye wiggle stereogram of the incense village"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/wiggle_bamboo.webp" width="100%" alt="Left/right eye wiggle stereogram of a bamboo bicycle in Hoi An"> |
 
 AirDrop `spatial.heic` to a Vision Pro or iPhone 15 Pro or later to view it in 3D. A parallel side-by-side `stereo_sbs.jpg` is written too.
 
@@ -40,9 +40,9 @@ AirDrop `spatial.heic` to a Vision Pro or iPhone 15 Pro or later to view it in 3
 
 Metric depth turns every photo into something you can measure. In the viewer, press **Measure** and click two points:
 
-<img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/measure_hue.jpg" width="100%" alt="Measuring a bicycle wheel as 63 cm in a photo taken from about 22 m away">
+<img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/measure_bicycle.jpg" width="100%" alt="Measuring the rear wheel of a bamboo bicycle as 66 cm">
 
-Sanity check: the rear wheel above measures **63 cm**, and real 26–28″ bicycle wheels are 66–71 cm. That is from a single telephoto shot about 22 m away, with no reference object and no LiDAR. Measurements parallel to the image are the reliable kind; separations along the viewing direction pick up depth noise, which grows with distance. Points at nearly the same depth are treated as one plane for that reason. Measurements are shareable: `viewer.html?measure=u1,v1,u2,v2`.
+Sanity check: the rear wheel of this bamboo mountain bike measures **66 cm**, and a 26″ MTB wheel with its tire is 66–67 cm across. That comes from a single photo with no reference object and no LiDAR; the focal length was estimated by the model too. Measurements parallel to the image are the reliable kind; separations along the viewing direction pick up depth noise, which grows with distance. Points at nearly the same depth are treated as one plane for that reason. Measurements are shareable: `viewer.html?measure=u1,v1,u2,v2`.
 
 ### Video: stable metric depth and cinematic mode
 
@@ -58,7 +58,7 @@ depthpro-mlx clip.mp4 --duration 6 --cinematic track --focus 0.45,0.55
 
 ### Interactive 3D in the browser
 
-**[▶ Try the live demo](https://huggingface.co/spaces/ntoan199/depthpro-mlx-demo)**: eight scenes from Vietnam. Drag, move the mouse, or tilt your phone; press **Depth** or **Measure**.
+**[▶ Try the live demo](https://huggingface.co/spaces/ntoan199/depthpro-mlx-demo)**: nine scenes from Vietnam. Drag, move the mouse, or tilt your phone; press **Depth** or **Measure**.
 
 `--web` writes a single self-contained `viewer.html` (WebGL2, no dependencies, ~3 MB) with the photo, depth and background layer embedded. It works offline from `file://` and is easy to share; `tools/media/build_demo.py` rebuilds the demo site.
 
@@ -96,6 +96,22 @@ The first run downloads the converted weights (1.9 GB) from the Hub, plus LaMa (
 
 Add `--gif` for GIF copies.
 
+### Docker (Linux servers)
+
+```bash
+docker run --rm -v "$PWD:/data" -v depthpro-cache:/cache \
+  ghcr.io/ntoantoan/depthpro-mlx photo.jpg --web --effects refocus
+```
+
+Images for `linux/amd64` and `linux/arm64` run MLX's CPU backend; `:latest-cuda` uses MLX's CUDA backend (amd64, NVIDIA GPU, `--gpus all`; experimental, built but not yet tested on a GPU). Build locally with `docker build -t depthpro-mlx .`.
+
+Things to know:
+
+- **On a Mac, don't use Docker.** Containers run in a Linux VM without Metal. Natively, Metal takes 3 s per photo; MLX's CPU backend needs ~2.5 min (measured on M4 Pro CPU cores, the same float32 low-memory path the image uses).
+- **CPU inference runs in float32 and needs about 8 GB of RAM**, so give the container ≥ 10 GB (Docker Desktop: Settings → Resources). It peaks at 7.6 GB thanks to strip-wise decoding; a naive float32 run needs 15 GB.
+- The image replaces the reference BLAS bundled with `mlx-cpu` by OpenBLAS: float32 matmul goes from ~7 to ~400 GFLOP/s.
+- `spatial.heic` needs macOS (ImageIO). In the container `--spatial` writes the side-by-side and wiggle previews only.
+
 ### Python
 
 ```python
@@ -114,9 +130,9 @@ iPhone photos carry the focal length in EXIF; the CLI reads it automatically for
 
 ## Gallery
 
-| Swan boats, Ninh Bình | Imperial City, Huế | Douc langurs, Sơn Trà |
+| Swan boats, Ninh Bình | Long corridor, Imperial City, Huế | Douc langurs, Sơn Trà |
 |---|---|---|
-| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/swan_boats.webp" width="100%" alt="3D parallax of abandoned swan boats"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/hue_citadel.webp" width="100%" alt="3D parallax of a cyclist in Hue citadel"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/douc_langur.webp" width="100%" alt="3D parallax of douc langurs on a branch"> |
+| <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/swan_boats.webp" width="100%" alt="3D parallax of abandoned swan boats"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/hue_corridor.webp" width="100%" alt="3D parallax of a long wooden corridor in the Imperial City of Hue"> | <img src="https://raw.githubusercontent.com/ntoantoan/depthpro-mlx/main/assets/douc_langur.webp" width="100%" alt="3D parallax of douc langurs on a branch"> |
 
 ## Benchmarks
 
@@ -179,7 +195,7 @@ See [CONTRIBUTING.md](https://github.com/ntoantoan/depthpro-mlx/blob/main/CONTRI
 
 | Component | License |
 |---|---|
-| Code in this repository | [MIT](https://github.com/ntoantoan/depthpro-mlx/blob/main/LICENSE) (the model files are a port of Apple's sample code, used under its terms) |
+| Code in this repository (and the Docker image's own layers) | [MIT](https://github.com/ntoantoan/depthpro-mlx/blob/main/LICENSE) (the model files are a port of Apple's sample code, used under its terms) |
 | Depth Pro weights (downloaded from the Hub) | Apple's [Depth Pro license](https://huggingface.co/ntoan199/DepthPro-mlx/blob/main/LICENSE), redistributed unchanged except for the format conversion |
 | LaMa weights (`inpaint` extra) | Apache-2.0 |
 | Demo photos and videos | CC0 / CC BY / CC BY-SA, see [assets/CREDITS.md](https://github.com/ntoantoan/depthpro-mlx/blob/main/assets/CREDITS.md) |

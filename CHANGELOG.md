@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
+### Added
+- **Docker images** for Linux (`ghcr.io/ntoantoan/depthpro-mlx`): multi-stage build, non-root user,
+  Hugging Face cache volume, amd64 + arm64 CPU images and an experimental CUDA image (`:latest-cuda`),
+  published by a release workflow; CI builds the CPU image on every push.
+- **Low-memory mode**: `load_model(patch_batch=...)` runs the ViT over the 37 tiles in chunks, and the
+  768/384/192 px decoder levels and the head are decoded in halo strips. Identical output (AbsRel
+  1.6e-6), float32 peak 15 GB → 7.6 GB. Enabled automatically on CPU.
+- `default_dtype()`: float16 on a GPU, float32 on CPU (BLAS only accelerates float32).
+- `depthpro-mlx --version`.
+
+### Changed
+- Docker CPU image swaps `mlx-cpu`'s bundled reference BLAS for OpenBLAS (~7 → ~400 GFLOP/s).
+- Dolly zoom renders from a denser point set (the background is magnified up to ~1.5x).
+- Demo media without identifiable people in the foreground: a bamboo bicycle (wheel measured at
+  66 cm vs. 66–67 cm real), a gate and a corridor of the Imperial City replace the cyclist photo.
+
 ## [0.2.1] - 2026-10-21
 
 ### Added
@@ -55,7 +73,8 @@ All notable changes to this project are documented here. The format follows
 - Single-file WebGL viewer with depth-range compression, stretch-aware background fill and a metric measuring tool.
 - `depthpro-mlx` CLI and a live demo on Hugging Face Spaces.
 
-[Unreleased]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ntoantoan/depthpro-mlx/releases/tag/v0.1.0
