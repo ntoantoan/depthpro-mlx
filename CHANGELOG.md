@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Wiggle previews no longer stutter: `spatial.wiggle_views()` renders real views gliding along the 63 mm
+  baseline (with the background layer) instead of cross-fading the two eye images, which doubled edges
+  mid-way. Replaces `wiggle_frames()`.
+
 ## [0.2.0] - 2026-10-21
 
 ### Changed

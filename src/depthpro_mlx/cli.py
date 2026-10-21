@@ -25,7 +25,7 @@ from .effects import Refocus, dolly_zoom_frames
 from .geometry import depth_to_points, layered_points, save_ply
 from .io import colorize_depth, fit_width, load_image
 from .render import orbit_frames
-from .spatial import render_stereo, side_by_side, wiggle_frames, write_spatial_heic
+from .spatial import render_stereo, side_by_side, wiggle_views, write_spatial_heic
 from .video import VIDEO_SUFFIXES, cinematic, read_frames, stabilize, video_depth
 
 EFFECTS = ("orbit", "dolly", "refocus")
@@ -187,9 +187,12 @@ def main() -> None:
         sp, sc = layered_points(depth, image, f_px, background, stride=max(1, int(w // (2.5 * sw))))
         left, right, f_stereo = render_stereo(sp, sc, f_px * sw / w, sw, sh)
         Image.fromarray(side_by_side(left, right)).save(out_dir / "stereo_sbs.jpg", quality=92)
-        wiggle = [Image.fromarray(fit_width(f, 640)) for f in wiggle_frames(left, right)]
+        ww = min(w, 640)
+        wh = round(h * ww / w) // 2 * 2
+        wp, wc = layered_points(depth, image, f_px, background, stride=max(1, int(w // (2.5 * ww))))
+        wiggle = [Image.fromarray(f) for f in wiggle_views(wp, wc, f_px * ww / w, ww, wh)]
         wiggle[0].save(
-            out_dir / "wiggle.webp", save_all=True, append_images=wiggle[1:], duration=60, loop=0, quality=80
+            out_dir / "wiggle.webp", save_all=True, append_images=wiggle[1:], duration=40, loop=0, quality=80
         )
         try:
             write_spatial_heic(out_dir / "spatial.heic", left, right, f_stereo)

@@ -89,11 +89,26 @@ def side_by_side(left: np.ndarray, right: np.ndarray, cross_eyed: bool = False) 
     return np.concatenate([right, left] if cross_eyed else [left, right], axis=1)
 
 
-def wiggle_frames(left: np.ndarray, right: np.ndarray, steps: int = 6) -> list[np.ndarray]:
-    """A smooth left<->right "wiggle" loop: 3D without glasses."""
+def wiggle_views(
+    points: np.ndarray,
+    colors: np.ndarray,
+    f_px: float,
+    width: int,
+    height: int,
+    baseline: float = HUMAN_BASELINE_M,
+    n_frames: int = 24,
+) -> list[np.ndarray]:
+    """A "wiggle" loop for 3D without glasses: real views rendered along the eye baseline.
+
+    The camera glides between the left and right eye positions on a sine, so
+    objects shift continuously by their true disparity. (Cross-fading the two
+    eye images instead doubles every edge mid-way and reads as a jerky jump.)
+    """
+    z_near = float(np.quantile(points[:, 2], 0.01))
+    f_out = f_px * (1 + 2 * f_px * (baseline / 2) / z_near / width + 0.01)
     frames = []
-    for i in range(2 * steps):
-        t = i / steps if i < steps else 2 - i / steps
-        s = t * t * (3 - 2 * t)
-        frames.append((left * (1 - s) + right * s).astype(np.uint8))
+    for i in range(n_frames):
+        x = (baseline / 2) * np.sin(2 * np.pi * i / n_frames)
+        eye = np.array([x, 0.0, 0.0], dtype=np.float32)
+        frames.append(render_view(points, colors, np.eye(3, dtype=np.float32), eye, f_out, width, height))
     return frames
