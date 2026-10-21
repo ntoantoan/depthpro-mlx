@@ -14,7 +14,15 @@ All notable changes to this project are documented here. The format follows
 - Dependency groups: `test` (CI), `dev` (default), `reference` (Apple's PyTorch code for parity).
 
 ### Added
+- **Inpainted background layer** (`depthpro_mlx.inpaint`, `inpaint` extra): LaMa removes the foreground near depth
+  discontinuities and paints what is behind it; videos, dolly zoom, stereo and the web viewer render it behind the
+  photo, so moving the camera no longer smears edges. CLI `--inpaint auto|on|off`.
+- Web viewer draws two layers (photo fades out where stretched) and allows ~1.7x more camera motion with a layer.
 - Unit tests (pytest), GitHub Actions CI on Apple Silicon, ruff, pre-commit.
+
+### Fixed
+- Occlusion masks: shifts no longer wrap around the image (the bottom row was compared with the sky), and
+  background depth is averaged over valid far-side pixels only (no points floating between layers).
 
 ## [0.1.0] - 2026-10-21
 

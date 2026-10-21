@@ -48,22 +48,27 @@ Sanity check: the rear wheel above measures **63 cm**, and real 26–28″ bicyc
 
 **[▶ Try the live demo](https://huggingface.co/spaces/ntoan199/depthpro-mlx-demo)**: eight scenes from Vietnam. Drag, move the mouse, or tilt your phone; press **Depth** or **Measure**.
 
-`--web` writes a single self-contained `viewer.html` (WebGL2, no dependencies, ~2 MB) with the photo and depth embedded. It works offline from `file://` and is easy to share; `tools/media/build_demo.py` rebuilds the demo site. Where the mesh stretches across a depth edge, the shader switches to an inpainted background layer instead of smearing the subject.
+`--web` writes a single self-contained `viewer.html` (WebGL2, no dependencies, ~3 MB) with the photo, depth and background layer embedded. It works offline from `file://` and is easy to share; `tools/media/build_demo.py` rebuilds the demo site.
+
+### No smearing: an inpainted background layer
+
+Moving the camera reveals things the photo never saw. Instead of stretching the subject over them, the foreground near every depth edge is removed and [LaMa](https://github.com/advimman/lama) paints in what is behind it. That gives a second layer with its own color and depth, drawn behind the photo by every renderer: video, dolly zoom, stereo and the web viewer. Only real depth *discontinuities* count, so gently sloping ground is left alone. With the layer the camera can also move about 1.7× further.
 
 ## Why
 
 - **First MLX port of Depth Pro.** Numerically matches the official PyTorch model (AbsRel 1.7e-6 in fp32) and runs **19% faster** than PyTorch on MPS.
 - **Metric depth, sharp edges.** Depth in meters, with hair, leaves and fur resolved. That is what makes the 3D look real and the bokeh fall off correctly.
 - **Photo → effects in one command.** Point cloud (`.ply`), 3D parallax, dolly zoom and refocus videos, all rendered locally.
+- **No smearing.** A LaMa-inpainted background layer fills what the camera uncovers.
 
 ## Quickstart
 
 ```bash
-pip install git+https://github.com/ntoantoan/depthpro-mlx
+pip install "depthpro-mlx[inpaint] @ git+https://github.com/ntoantoan/depthpro-mlx"
 depthpro-mlx photo.jpg --effects all --spatial --web --ply
 ```
 
-The first run downloads the converted weights (1.9 GB) from the Hub. Outputs land in `photo_depthpro/`:
+The first run downloads the converted weights (1.9 GB) from the Hub, plus LaMa (208 MB) for the background layer. Without the `inpaint` extra everything still works, with a blurred fill instead of an inpainted layer (`--inpaint off` forces that). Outputs land in `photo_depthpro/`:
 
 | File | What |
 |---|---|
@@ -131,7 +136,8 @@ uv run python tools/bench/parity.py --dtype float16
 4. **Dolly zoom.** The camera pulls back by `b` while the focal length scales by `(z_s + b) / z_s`, keeping the subject at depth `z_s` fixed in size. `b` is capped so near content never shrinks below 85%.
 5. **Refocus.** Thin-lens circle of confusion `r = k·|1/z − 1/z_f|` on a precomputed stack of disk-blurred images in linear light, with a highlight boost for bokeh. The focus sweeps uniformly in diopters.
 6. **Spatial photo.** Two parallel pinhole cameras at ±31.5 mm render the eyes; a small Swift helper writes them with ImageIO as a `StereoPair` group with `SimplifiedPinhole` intrinsics and extrinsics, compiled once and cached in `~/.cache/depthpro-mlx`.
-7. **Web viewer.** A grid mesh unprojected from 16-bit inverse depth packed into a PNG, drawn with WebGL2. The camera radius uses the same parallax cap as the offline renderer.
+7. **Web viewer.** Two grid meshes (photo, and background layer behind it) unprojected from 16-bit inverse depth packed into PNGs, drawn with WebGL2. Depth is compressed around the subject (`z' = pivot·(z/pivot)^γ`) so a leaf at 40 cm in front of a sky doesn't take the whole parallax budget. Where a photo triangle stretches across an edge (detected from screen-space UV derivatives) it fades out and the inpainted layer shows through.
+8. **Background layer.** Depth steps larger than 6% between pixels 2 px apart mark discontinuities; their far-side depth is spread over 2.5% of the width, and foreground pixels nearer than it form the mask. LaMa (ONNX, 512 px tiles with feathered overlaps, at ~1024 px) fills it; the layer's depth is the far side, smoothed within the mask.
 
 ## Development
 
@@ -140,6 +146,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): `uv sync`, then `uv run pytest -m "not s
 ## Credits
 
 - [Depth Pro](https://arxiv.org/abs/2410.02073) by Bochkovskii et al., Apple. Weights are redistributed under Apple's [license](https://huggingface.co/ntoan199/DepthPro-mlx/blob/main/LICENSE). This project is not affiliated with Apple.
+- [LaMa](https://github.com/advimman/lama) by Suvorov et al. (Apache-2.0), via the ONNX port [Carve/LaMa-ONNX](https://huggingface.co/Carve/LaMa-ONNX).
 - Demo photos: Wikimedia Commons contributors, see [assets/CREDITS.md](assets/CREDITS.md).
 
 ```bibtex
