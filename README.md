@@ -44,6 +44,18 @@ Metric depth turns every photo into something you can measure. In the viewer, pr
 
 Sanity check: the rear wheel above measures **63 cm**, and real 26–28″ bicycle wheels are 66–71 cm. That is from a single telephoto shot about 22 m away, with no reference object and no LiDAR. Measurements parallel to the image are the reliable kind; separations along the viewing direction pick up depth noise, which grows with distance. Points at nearly the same depth are treated as one plane for that reason. Measurements are shareable: `viewer.html?measure=u1,v1,u2,v2`.
 
+### Video: stable metric depth and cinematic mode
+
+Feed it a video. Depth Pro runs per frame with **one focal length for the whole clip** (so meters stay meters), and the depth is stabilized along optical flow, blended only where the flow is forward-backward consistent, so moving people don't leave ghosts. Then "cinematic mode" refocuses the footage like a focus puller: `track` keeps a subject sharp, `pull` racks from near to far.
+
+| Cinematic mode · Hà Nội train street | Video depth · the train leaves | Tracking focus · basket maker |
+|---|---|---|
+| <img src="assets/train_street_cinematic.webp" width="100%" alt="Focus pulls from a tourist at 0.9 m to the passing train at 3.8 m"> | <img src="assets/train_departure_depth.webp" width="100%" alt="Stabilized depth of a crowd on motorbikes as the train leaves"> | <img src="assets/basket_maker_cinematic.webp" width="100%" alt="Focus follows a craftsman weaving a basket"> |
+
+```bash
+depthpro-mlx clip.mp4 --duration 6 --cinematic track --focus 0.45,0.55
+```
+
 ### Interactive 3D in the browser
 
 **[▶ Try the live demo](https://huggingface.co/spaces/ntoan199/depthpro-mlx-demo)**: eight scenes from Vietnam. Drag, move the mouse, or tilt your phone; press **Depth** or **Measure**.
@@ -60,6 +72,7 @@ Moving the camera reveals things the photo never saw. Instead of stretching the 
 - **Metric depth, sharp edges.** Depth in meters, with hair, leaves and fur resolved. That is what makes the 3D look real and the bokeh fall off correctly.
 - **Photo → effects in one command.** Point cloud (`.ply`), 3D parallax, dolly zoom and refocus videos, all rendered locally.
 - **No smearing.** A LaMa-inpainted background layer fills what the camera uncovers.
+- **Video too.** Stable metric depth per frame and a cinematic-mode refocus for any clip.
 
 ## Quickstart
 
@@ -79,6 +92,7 @@ The first run downloads the converted weights (1.9 GB) from the Hub, plus LaMa (
 | `refocus.mp4` | focus pull near → far (`--effects refocus`) |
 | `spatial.heic`, `stereo_sbs.jpg`, `wiggle.webp` | spatial photo, side-by-side stereo, wiggle preview (`--spatial`, needs the Swift toolchain for the HEIC) |
 | `viewer.html` | interactive 3D viewer, single file (`--web`) |
+| video input: `depth.mp4`, `cinematic.mp4`, `depth.npz` | stabilized depth video (one colour scale for the clip), refocused video, raw depth in meters |
 
 Add `--gif` for GIF copies.
 
@@ -138,6 +152,7 @@ uv run python tools/bench/parity.py --dtype float16
 6. **Spatial photo.** Two parallel pinhole cameras at ±31.5 mm render the eyes; a small Swift helper writes them with ImageIO as a `StereoPair` group with `SimplifiedPinhole` intrinsics and extrinsics, compiled once and cached in `~/.cache/depthpro-mlx`.
 7. **Web viewer.** Two grid meshes (photo, and background layer behind it) unprojected from 16-bit inverse depth packed into PNGs, drawn with WebGL2. Depth is compressed around the subject (`z' = pivot·(z/pivot)^γ`) so a leaf at 40 cm in front of a sky doesn't take the whole parallax budget. Where a photo triangle stretches across an edge (detected from screen-space UV derivatives) it fades out and the inpainted layer shows through.
 8. **Background layer.** Depth steps larger than 6% between pixels 2 px apart mark discontinuities; their far-side depth is spread over 2.5% of the width, and foreground pixels nearer than it form the mask. LaMa (ONNX, 512 px tiles with feathered overlaps, at ~1024 px) fills it; the layer's depth is the far side, smoothed within the mask.
+9. **Video.** Focal length = median of Depth Pro's estimates on 5 frames, fixed for the clip. Log-depth is blended with the previous frame warped by DIS optical flow, weight 0.6 × (1.5 − forward-backward error in px, clipped to 0..1). Cinematic `track` follows the median depth around the focus point with a lagged (EMA) focus puller.
 
 ## Development
 
@@ -147,7 +162,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): `uv sync`, then `uv run pytest -m "not s
 
 - [Depth Pro](https://arxiv.org/abs/2410.02073) by Bochkovskii et al., Apple. Weights are redistributed under Apple's [license](https://huggingface.co/ntoan199/DepthPro-mlx/blob/main/LICENSE). This project is not affiliated with Apple.
 - [LaMa](https://github.com/advimman/lama) by Suvorov et al. (Apache-2.0), via the ONNX port [Carve/LaMa-ONNX](https://huggingface.co/Carve/LaMa-ONNX).
-- Demo photos: Wikimedia Commons contributors, see [assets/CREDITS.md](assets/CREDITS.md).
+- Demo photos and videos: Wikimedia Commons contributors, see [assets/CREDITS.md](assets/CREDITS.md).
 
 ```bibtex
 @inproceedings{Bochkovskii2024:arxiv,

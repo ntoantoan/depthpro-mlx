@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-21
+
 ### Changed
 - Package split into subpackages: `model`, `render`, `effects`, `spatial`, `web`, plus `hub` and `io`.
   Public API (`load_model`, `predict`, `preprocess`, `DepthPro`) is unchanged.
@@ -18,6 +20,10 @@ All notable changes to this project are documented here. The format follows
   discontinuities and paints what is behind it; videos, dolly zoom, stereo and the web viewer render it behind the
   photo, so moving the camera no longer smears edges. CLI `--inpaint auto|on|off`.
 - Web viewer draws two layers (photo fades out where stretched) and allows ~1.7x more camera motion with a layer.
+- **Video input** (`depthpro_mlx.video`): per-frame depth with a clip-wide focal length, optical-flow stabilization,
+  and cinematic-mode refocus (`track` a subject or `pull` near to far). The CLI detects video files:
+  `depthpro-mlx clip.mp4 --duration 6 --cinematic track`.
+- `colorize_depth(..., inv_range=...)` for a fixed colour scale across frames.
 - Unit tests (pytest), GitHub Actions CI on Apple Silicon, ruff, pre-commit.
 
 ### Fixed
@@ -35,5 +41,6 @@ All notable changes to this project are documented here. The format follows
 - Single-file WebGL viewer with depth-range compression, stretch-aware background fill and a metric measuring tool.
 - `depthpro-mlx` CLI and a live demo on Hugging Face Spaces.
 
-[Unreleased]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ntoantoan/depthpro-mlx/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ntoantoan/depthpro-mlx/releases/tag/v0.1.0
