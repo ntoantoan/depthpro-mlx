@@ -32,6 +32,9 @@ dependencies = [
 [project.optional-dependencies]
 # Converting the official PyTorch checkpoint needs torch.
 convert = ["torch>=2.14.1"]
+inpaint = [
+    "onnxruntime>=1.20",
+]
 
 [project.urls]
 Homepage = "https://github.com/ntoantoan/depthpro-mlx"

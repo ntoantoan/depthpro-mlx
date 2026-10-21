@@ -65,6 +65,30 @@ def depth_to_points(
     return points.astype(np.float32), colors[keep].astype(np.uint8)
 
 
+def layered_points(
+    depth: np.ndarray,
+    image: np.ndarray,
+    f_px: float,
+    background: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
+    stride: int = 1,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Photo points plus, behind them, the inpainted background layer.
+
+    ``background`` is ``(color, depth, mask)`` from :func:`depthpro_mlx.inpaint.layered_background`.
+    Background points exist only inside the mask and sit at the far side's
+    depth, so they are hidden from the photo's viewpoint and show up exactly
+    where moving the camera uncovers something.
+    """
+    points, colors = depth_to_points(depth, image, f_px, stride=stride)
+    if background is None:
+        return points, colors
+    bg_color, bg_depth, mask = background
+    bg_points, bg_colors = depth_to_points(
+        np.where(mask, bg_depth, 0), bg_color, f_px, stride=stride, edge_threshold=None
+    )
+    return np.concatenate([points, bg_points]), np.concatenate([colors, bg_colors])
+
+
 def save_ply(path: str | Path, points: np.ndarray, colors: np.ndarray) -> None:
     """Write a binary little-endian PLY point cloud (viewable in MeshLab, Blender, Preview)."""
     n = len(points)
