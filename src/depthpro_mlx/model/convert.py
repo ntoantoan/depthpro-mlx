@@ -1,7 +1,7 @@
 """Convert the official PyTorch checkpoint (depth_pro.pt) to MLX safetensors.
 
 Usage:
-    python -m depthpro_mlx.convert --checkpoint checkpoints/depth_pro.pt --out weights/depth_pro.safetensors
+    python -m depthpro_mlx.model.convert --checkpoint checkpoints/depth_pro.pt --out weights/depth_pro.safetensors
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import mlx.nn as nn
 import numpy as np
 from mlx.utils import tree_flatten
 
-from .model import DepthPro
+from .depth_pro import DepthPro
 
 
 def _conv_transpose_paths(model: nn.Module) -> set[str]:

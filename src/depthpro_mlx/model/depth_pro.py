@@ -8,7 +8,6 @@ PyTorch reference so checkpoint keys map one-to-one; only tensor layouts differ
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -26,7 +25,7 @@ def _apply(layers: list, x: mx.array) -> mx.array:
     return x
 
 
-def _project_upsample(dim_in: int, dim_out: int, upsample_layers: int, dim_int: Optional[int] = None) -> list:
+def _project_upsample(dim_in: int, dim_out: int, upsample_layers: int, dim_int: int | None = None) -> list:
     dim_int = dim_out if dim_int is None else dim_int
     blocks = [nn.Conv2d(dim_in, dim_int, kernel_size=1, bias=False)]
     blocks += [
@@ -150,7 +149,7 @@ class FeatureFusionBlock2d(nn.Module):
             self.deconv = nn.ConvTranspose2d(num_features, num_features, kernel_size=2, stride=2, bias=False)
         self.out_conv = nn.Conv2d(num_features, num_features, kernel_size=1, bias=True)
 
-    def __call__(self, x0: mx.array, x1: Optional[mx.array] = None) -> mx.array:
+    def __call__(self, x0: mx.array, x1: mx.array | None = None) -> mx.array:
         x = x0
         if x1 is not None:
             x = x + self.resnet1(x1)
@@ -164,11 +163,12 @@ class MultiresConvDecoder(nn.Module):
     def __init__(self, dims_encoder: list[int], dim_decoder: int):
         super().__init__()
         self.dim_decoder = dim_decoder
-        convs = [nn.Identity() if dims_encoder[0] == dim_decoder else
-                 nn.Conv2d(dims_encoder[0], dim_decoder, kernel_size=1, bias=False)]
-        convs += [
-            nn.Conv2d(d, dim_decoder, kernel_size=3, padding=1, bias=False) for d in dims_encoder[1:]
+        convs = [
+            nn.Identity()
+            if dims_encoder[0] == dim_decoder
+            else nn.Conv2d(dims_encoder[0], dim_decoder, kernel_size=1, bias=False)
         ]
+        convs += [nn.Conv2d(d, dim_decoder, kernel_size=3, padding=1, bias=False) for d in dims_encoder[1:]]
         self.convs = convs
         self.fusions = [FeatureFusionBlock2d(dim_decoder, deconv=(i != 0)) for i in range(len(dims_encoder))]
 
@@ -226,7 +226,7 @@ class DepthPro(nn.Module):
     def img_size(self) -> int:
         return self.encoder.img_size
 
-    def __call__(self, x: mx.array) -> tuple[mx.array, Optional[mx.array]]:
+    def __call__(self, x: mx.array) -> tuple[mx.array, mx.array | None]:
         """x: (B, 1536, 1536, 3) normalized to [-1, 1].
         Returns canonical inverse depth (B, 1536, 1536, 1) and FOV in degrees (B,)."""
         encodings = self.encoder(x)
@@ -237,7 +237,7 @@ class DepthPro(nn.Module):
             fov_deg = self.fov(x, mx.stop_gradient(features_0)).reshape(-1)
         return canonical_inverse_depth, fov_deg
 
-    def infer(self, image: mx.array, f_px: Optional[float] = None) -> dict:
+    def infer(self, image: mx.array, f_px: float | None = None) -> dict:
         """image: (H, W, 3) or (1, H, W, 3), already normalized to [-1, 1].
 
         Returns metric depth in meters at the input resolution and the focal

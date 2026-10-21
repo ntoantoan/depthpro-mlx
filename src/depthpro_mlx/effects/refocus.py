@@ -1,63 +1,13 @@
-"""Cinematic effects that rely on *metric* depth: dolly zoom and post-capture refocus."""
+"""Post-capture refocus: thin-lens depth of field driven by metric depth."""
 
 from __future__ import annotations
 
 import math
-from typing import Iterator
 
 import cv2
 import numpy as np
 
-from .render import look_at, render_view
-
-
-def _ease(t: float) -> float:
-    """Smooth 0 -> 1 -> 0 over t in [0, 1) for seamless loops."""
-    return 0.5 - 0.5 * math.cos(2 * math.pi * t)
-
-
-def dolly_zoom_frames(
-    points: np.ndarray,
-    colors: np.ndarray,
-    f_px: float,
-    width: int,
-    height: int,
-    n_frames: int = 96,
-    subject_quantile: float = 0.3,
-    min_magnification: float = 0.85,
-    max_dolly: float = 0.5,
-) -> Iterator[np.ndarray]:
-    """Hitchcock "vertigo" shot from a single photo.
-
-    The camera pulls back by ``b`` while the focal length grows as
-    ``f * (z_s + b) / z_s``, so the subject at depth ``z_s`` keeps its size and
-    the background swells around it. Near content shrinks by
-    ``(z_s + b) * z / (z_s * (z + b))``; ``b`` is capped so that factor never
-    drops below ``min_magnification`` and the frame is cropped to match, which
-    keeps every pixel inside the original photo.
-    """
-    z = points[:, 2]
-    z_s = float(np.quantile(z, subject_quantile))
-    z_n = float(np.quantile(z, 0.02))
-
-    def near_mag(b: float) -> float:
-        return (z_s + b) * z_n / (z_s * (z_n + b))
-
-    b_max = max_dolly * z_s
-    if near_mag(b_max) < min_magnification:
-        lo, hi = 0.0, b_max
-        for _ in range(40):
-            mid = (lo + hi) / 2
-            lo, hi = (mid, hi) if near_mag(mid) >= min_magnification else (lo, mid)
-        b_max = lo
-    crop = 1.0 / near_mag(b_max) * 1.02
-
-    target = np.array([0.0, 0.0, z_s], dtype=np.float32)
-    for i in range(n_frames):
-        b = b_max * _ease(i / n_frames)
-        eye = np.array([0.0, 0.0, -b], dtype=np.float32)
-        f = f_px * crop * (z_s + b) / z_s
-        yield render_view(points, colors, look_at(eye, target), eye, f, width, height)
+from ..render import ease_loop
 
 
 def _disk(radius: float) -> np.ndarray:
@@ -104,6 +54,6 @@ class Refocus:
         # Strength chosen so content at the far end is maximally blurred when focused near.
         strength = self.max_radius / max(1 / near - 1 / far, 1e-6)
         for i in range(n_frames):
-            s = _ease(i / n_frames)
+            s = ease_loop(i / n_frames)
             focus = 1.0 / ((1 - s) / near + s / far)
             yield self.render(focus, strength), focus

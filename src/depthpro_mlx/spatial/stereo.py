@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .render import render_view
+from ..render import render_view
 
 HUMAN_BASELINE_M = 0.063
 _SWIFT_SOURCE = Path(__file__).with_name("spatial_writer.swift")
@@ -71,8 +71,15 @@ def write_spatial_heic(
         Image.fromarray(left).save(lp)
         Image.fromarray(right).save(rp)
         subprocess.run(
-            [str(_writer_binary()), str(lp), str(rp), str(path), f"{f_px:.3f}", f"{baseline:.4f}",
-             f"{disparity_adjustment:.5f}"],
+            [
+                str(_writer_binary()),
+                str(lp),
+                str(rp),
+                str(path),
+                f"{f_px:.3f}",
+                f"{baseline:.4f}",
+                f"{disparity_adjustment:.5f}",
+            ],
             check=True,
         )
 

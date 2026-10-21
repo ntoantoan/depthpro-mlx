@@ -130,9 +130,7 @@ class ViT(nn.Module):
     def grid_size(self) -> int:
         return self.img_size // self.patch_size
 
-    def __call__(
-        self, x: mx.array, return_blocks: tuple[int, ...] = ()
-    ) -> tuple[mx.array, list[mx.array]]:
+    def __call__(self, x: mx.array, return_blocks: tuple[int, ...] = ()) -> tuple[mx.array, list[mx.array]]:
         """Return the normalized token sequence (with class token) and the raw
         outputs of the requested intermediate blocks."""
         x = self.patch_embed(x)

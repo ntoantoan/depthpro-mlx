@@ -1,12 +1,24 @@
 [project]
 name = "depthpro-mlx"
-version = "0.1.0"
-description = "Apple Depth Pro (sharp monocular metric depth) ported to MLX for Apple Silicon"
+dynamic = ["version"]
+description = "Apple Depth Pro (sharp monocular metric depth) on MLX: one photo to 3D, dolly zoom, refocus, spatial photos and measurements on Apple Silicon"
 readme = "README.md"
-authors = [
-    { name = "Nguyễn Đình Toàn", email = "ntoan199@gmail.com" }
-]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Nguyễn Đình Toàn", email = "ntoan199@gmail.com" }]
 requires-python = ">=3.12"
+keywords = ["mlx", "apple-silicon", "depth-estimation", "monocular-depth", "computer-vision", "3d", "spatial-photo"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: 3D Rendering",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
 dependencies = [
     "huggingface-hub>=2.2.0",
     "imageio[ffmpeg]>=2.38.1",
@@ -21,9 +33,29 @@ dependencies = [
 # Converting the official PyTorch checkpoint needs torch.
 convert = ["torch>=2.14.1"]
 
+[project.urls]
+Homepage = "https://github.com/ntoantoan/depthpro-mlx"
+Demo = "https://huggingface.co/spaces/ntoan199/depthpro-mlx-demo"
+Weights = "https://huggingface.co/ntoan199/DepthPro-mlx"
+Issues = "https://github.com/ntoantoan/depthpro-mlx/issues"
+Changelog = "https://github.com/ntoantoan/depthpro-mlx/blob/main/CHANGELOG.md"
+
+[project.scripts]
+depthpro-mlx = "depthpro_mlx.cli:main"
+
 [dependency-groups]
-# Reference implementation, used for parity tests and baseline benchmarks.
+# Fast unit tests (what CI runs). No weights, no torch.
+test = ["pytest>=8.4"]
+# Day-to-day development.
 dev = [
+    { include-group = "test" },
+    "pre-commit>=4.3",
+    "ruff>=0.13",
+    "torch>=2.14.1",
+]
+# Apple's reference implementation, for parity checks and baseline benchmarks.
+# Fetch it first with third_party/get_reference.sh.
+reference = [
     "depth-pro",
     "matplotlib>=3.11.2",
     "timm>=1.0.30",
@@ -31,12 +63,35 @@ dev = [
     "torchvision>=0.29.1",
 ]
 
-[project.scripts]
-depthpro-mlx = "depthpro_mlx.cli:main"
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.sources]
+depth-pro = { path = "third_party/ml-depth-pro", editable = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv.sources]
-depth-pro = { path = "third_party/ml-depth-pro", editable = true }
+[tool.hatch.version]
+path = "src/depthpro_mlx/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/assets", "/demo", "/tools", "/hf", "/third_party", "/.github"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "NPY"]
+ignore = ["E501"]  # long lines are fine when the formatter can't split them
+
+[tool.ruff.lint.per-file-ignores]
+"tools/**" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["slow: needs downloaded weights or the reference implementation"]

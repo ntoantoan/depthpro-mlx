@@ -1,34 +1,35 @@
-"""Depth Pro (Apple) — sharp monocular metric depth, ported to MLX for Apple Silicon."""
+"""Depth Pro (Apple): sharp monocular metric depth, ported to MLX for Apple Silicon.
+
+from depthpro_mlx import load_model, predict
+model = load_model()                      # converted weights from the Hugging Face Hub
+out = predict(model, image)               # image: RGB uint8 (H, W, 3)
+out["depth"], out["focallength_px"]       # meters, pixels
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Union
 
 import mlx.core as mx
 import numpy as np
 
+from .hub import HF_REPO, WEIGHTS_FILE, resolve_weights
 from .model import DepthPro
 
-__all__ = ["DepthPro", "load_model", "preprocess", "predict", "HF_REPO"]
-
-HF_REPO = "ntoan199/DepthPro-mlx"
-WEIGHTS_FILE = "depth_pro.safetensors"
-
-
-def resolve_weights(weights: Optional[Union[str, Path]] = None) -> Path:
-    """A local file if given (or present in ./weights), otherwise download from the Hub."""
-    if weights is not None:
-        return Path(weights)
-    local = Path("weights") / WEIGHTS_FILE
-    if local.exists():
-        return local
-    from huggingface_hub import hf_hub_download
-
-    return Path(hf_hub_download(HF_REPO, WEIGHTS_FILE))
+__version__ = "0.2.0"
+__all__ = [
+    "HF_REPO",
+    "WEIGHTS_FILE",
+    "DepthPro",
+    "load_model",
+    "predict",
+    "preprocess",
+    "resolve_weights",
+    "__version__",
+]
 
 
-def load_model(weights: Optional[Union[str, Path]] = None, dtype: mx.Dtype = mx.float16) -> DepthPro:
+def load_model(weights: str | Path | None = None, dtype: mx.Dtype = mx.float16) -> DepthPro:
     """Load MLX weights: a converted local file, or the published ones from the Hub."""
     model = DepthPro()
     model.load_weights(str(resolve_weights(weights)), strict=True)
@@ -44,7 +45,7 @@ def preprocess(image: np.ndarray, dtype: mx.Dtype = mx.float16) -> mx.array:
     return ((x - 0.5) / 0.5).astype(dtype)
 
 
-def predict(model: DepthPro, image: np.ndarray, f_px: Optional[float] = None) -> dict:
+def predict(model: DepthPro, image: np.ndarray, f_px: float | None = None) -> dict:
     """Run Depth Pro on an RGB uint8 image.
 
     Returns ``{"depth": np.ndarray (H, W) in meters, "focallength_px": float}``.

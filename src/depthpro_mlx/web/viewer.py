@@ -22,8 +22,6 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from .render import _fill_farthest
-
 _TEMPLATE = Path(__file__).with_name("viewer_template.html")
 
 
@@ -118,7 +116,9 @@ def export_viewer(
     """
     h, w = image.shape[:2]
     scale = min(1.0, max_size / max(h, w))
-    color = cv2.resize(image, (round(w * scale), round(h * scale)), interpolation=cv2.INTER_AREA) if scale < 1 else image
+    color = (
+        cv2.resize(image, (round(w * scale), round(h * scale)), interpolation=cv2.INTER_AREA) if scale < 1 else image
+    )
     ds = min(1.0, depth_size / max(h, w))
     small_depth = cv2.resize(depth, (round(w * ds), round(h * ds)), interpolation=cv2.INTER_AREA)
 
@@ -134,9 +134,17 @@ def export_viewer(
     radius = min(0.06 * pivot, max_parallax * w / max(f_px * (1 / near_r - 1 / far_r), 1e-9))
     shift = f_px * radius * max(1 / near_r - 1 / pivot, 1 / pivot - 1 / far_r)
     params = {
-        "width": w, "height": h, "f": f_px, "grid": grid,
-        "invMin": inv_min, "invMax": inv_max,
-        "near": near, "far": far, "pivot": pivot, "radius": radius, "gamma": gamma,
+        "width": w,
+        "height": h,
+        "f": f_px,
+        "grid": grid,
+        "invMin": inv_min,
+        "invMax": inv_max,
+        "near": near,
+        "far": far,
+        "pivot": pivot,
+        "radius": radius,
+        "gamma": gamma,
         "crop": float(np.clip(1 + 2.2 * shift / w + 0.02, 1.04, 1.35)),
     }
 
